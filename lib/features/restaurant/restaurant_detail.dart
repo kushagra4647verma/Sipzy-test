@@ -8,6 +8,7 @@ import '../../core/theme/radius.dart';
 import '../../shared/ui/share_modal.dart';
 import '../../shared/ui/invite_friends_modal.dart';
 import '../../shared/ui/group_mix_magic.dart';
+import 'package:go_router/go_router.dart';
 
 class RestaurantDetail extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -368,7 +369,7 @@ class _RestaurantDetailState extends State<RestaurantDetail> {
 
   Widget _beverageCard(Map bev) {
     return InkWell(
-      onTap: () => Navigator.pushNamed(context, '/beverage/${bev['id']}'),
+      onTap: () => context.go('/beverage/${bev['id']}'),
       child: Container(
         decoration: BoxDecoration(
           color: AppColors.card,

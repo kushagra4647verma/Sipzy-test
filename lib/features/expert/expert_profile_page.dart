@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:go_router/go_router.dart';
 
 import '../../core/theme/colors.dart';
 import '../../core/theme/radius.dart';
@@ -8,12 +9,12 @@ import '../../shared/navigation/expert_bottom_nav.dart';
 
 class ExpertProfilePage extends StatefulWidget {
   final Map<String, dynamic> expert;
-  final Function(Map<String, dynamic>?) onExpertChanged;
+  final VoidCallback onLogout;
 
   const ExpertProfilePage({
     super.key,
     required this.expert,
-    required this.onExpertChanged,
+    required this.onLogout,
   });
 
   @override
@@ -48,6 +49,14 @@ class _ExpertProfilePageState extends State<ExpertProfilePage> {
     );
   }
 
+  @override
+  void dispose() {
+    nameCtrl.dispose();
+    bioCtrl.dispose();
+    tagsCtrl.dispose();
+    super.dispose();
+  }
+
   Future<void> fetchStats() async {
     try {
       final res = await http.get(
@@ -60,7 +69,7 @@ class _ExpertProfilePageState extends State<ExpertProfilePage> {
   }
 
   void logout() {
-    onLogout();
+    widget.onLogout();
     context.go('/expert/auth');
   }
 
@@ -84,19 +93,24 @@ class _ExpertProfilePageState extends State<ExpertProfilePage> {
         }),
       );
 
-      final data = jsonDecode(res.body);
-      widget.onExpertChanged(data['expert']);
-
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile updated successfully')),
-      );
+      if (res.statusCode == 200) {
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Profile updated successfully')),
+          );
+        }
+      }
     } catch (_) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Failed to update profile')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to update profile')),
+        );
+      }
     } finally {
-      setState(() => loading = false);
+      if (mounted) {
+        setState(() => loading = false);
+      }
     }
   }
 
@@ -121,7 +135,7 @@ class _ExpertProfilePageState extends State<ExpertProfilePage> {
 
     return Container(
       padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: Colors.white12)),
       ),
       child: Column(
@@ -137,7 +151,6 @@ class _ExpertProfilePageState extends State<ExpertProfilePage> {
                 : null,
           ),
           const SizedBox(height: 12),
-
           Text(
             widget.expert['name'],
             style: const TextStyle(
@@ -147,9 +160,7 @@ class _ExpertProfilePageState extends State<ExpertProfilePage> {
             ),
           ),
           const SizedBox(height: 6),
-
           _verifiedBadge(),
-
           if ((widget.expert['bio'] ?? '').toString().isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 12),
@@ -159,17 +170,17 @@ class _ExpertProfilePageState extends State<ExpertProfilePage> {
                 style: const TextStyle(color: Colors.white70),
               ),
             ),
-
           if (tags.isNotEmpty) ...[
             const SizedBox(height: 12),
             Wrap(
               spacing: 8,
               runSpacing: 8,
               alignment: WrapAlignment.center,
-              children: tags.map<Widget>((t) => _tagChip(t)).toList(),
+              children: tags
+                  .map<Widget>((t) => _tagChip(t.toString()))
+                  .toList(),
             ),
           ],
-
           const SizedBox(height: 12),
           Text(
             '${stats['total_ratings']} Total Ratings',
@@ -189,9 +200,9 @@ class _ExpertProfilePageState extends State<ExpertProfilePage> {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.secondary.withOpacity(0.4)),
       ),
-      child: Row(
+      child: const Row(
         mainAxisSize: MainAxisSize.min,
-        children: const [
+        children: [
           Icon(Icons.verified, color: AppColors.secondary, size: 14),
           SizedBox(width: 6),
           Text(
@@ -283,6 +294,7 @@ class _ExpertProfilePageState extends State<ExpertProfilePage> {
             const SizedBox(height: 6),
             Text(
               label,
+              textAlign: TextAlign.center,
               style: const TextStyle(color: Colors.white60, fontSize: 11),
             ),
           ],
@@ -301,7 +313,10 @@ class _ExpertProfilePageState extends State<ExpertProfilePage> {
           OutlinedButton.icon(
             onPressed: () => _openEditModal(),
             icon: const Icon(Icons.edit, color: Colors.white),
-            label: const Text('Edit Profile'),
+            label: const Text(
+              'Edit Profile',
+              style: TextStyle(color: Colors.white),
+            ),
             style: _outlineStyle(),
           ),
           const SizedBox(height: 12),
@@ -332,13 +347,14 @@ class _ExpertProfilePageState extends State<ExpertProfilePage> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: AppColors.background,
+        backgroundColor: AppColors.card,
         title: const Text(
           'Edit Profile',
           style: TextStyle(color: Colors.white),
         ),
         content: SingleChildScrollView(
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               _input('Name', nameCtrl),
               const SizedBox(height: 12),
@@ -366,7 +382,17 @@ class _ExpertProfilePageState extends State<ExpertProfilePage> {
     return TextField(
       controller: ctrl,
       maxLines: maxLines,
-      decoration: InputDecoration(labelText: label),
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(color: Colors.white70),
+        enabledBorder: const OutlineInputBorder(
+          borderSide: BorderSide(color: Colors.white24),
+        ),
+        focusedBorder: const OutlineInputBorder(
+          borderSide: BorderSide(color: AppColors.primary),
+        ),
+      ),
     );
   }
 }

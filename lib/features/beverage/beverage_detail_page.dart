@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme/colors.dart';
 import '../../core/theme/radius.dart';
 import '../../shared/ui/share_modal.dart';
+import 'package:go_router/go_router.dart';
 
 class BeverageDetailPage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -350,7 +351,7 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
     final r = beverage!['restaurant'];
 
     return GestureDetector(
-      onTap: () => Navigator.pushNamed(context, '/restaurant/${r['id']}'),
+      onTap: () => context.go('/restaurant/${r['id']}'),
       child: _card(
         Row(
           children: [

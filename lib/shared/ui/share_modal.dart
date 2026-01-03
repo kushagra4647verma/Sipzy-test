@@ -118,7 +118,7 @@ class ShareModal extends StatelessWidget {
               itemBuilder: (_, i) {
                 final option = shareOptions[i];
                 return GestureDetector(
-                  onTap: option['action'],
+                  onTap: option['action'] as VoidCallback,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -126,18 +126,18 @@ class ShareModal extends StatelessWidget {
                         width: 48,
                         height: 48,
                         decoration: BoxDecoration(
-                          color: option['color'],
+                          color: option['color'] as Color,
                           shape: BoxShape.circle,
                         ),
                         alignment: Alignment.center,
                         child: Text(
-                          option['icon'],
+                          option['icon'] as String,
                           style: const TextStyle(fontSize: 22),
                         ),
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        option['name'],
+                        option['name'] as String,
                         style: const TextStyle(
                           color: Colors.white70,
                           fontSize: 12,

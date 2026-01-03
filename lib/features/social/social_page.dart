@@ -2,12 +2,13 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:go_router/go_router.dart';
 
 class SocialPage extends StatefulWidget {
   final Map<String, dynamic> user;
-  final Function(Map<String, dynamic>?) setUser;
+  final VoidCallback onLogout;
 
-  const SocialPage({super.key, required this.user, required this.setUser});
+  const SocialPage({super.key, required this.user, required this.onLogout});
 
   @override
   State<SocialPage> createState() => _SocialPageState();
@@ -56,6 +57,12 @@ class _SocialPageState extends State<SocialPage>
     fetchAll();
   }
 
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
   Future<void> fetchAll() async {
     setState(() => loading = true);
 
@@ -69,18 +76,22 @@ class _SocialPageState extends State<SocialPage>
         http.get(Uri.parse('$API/friends/${widget.user['id']}')),
       ]);
 
-      setState(() {
-        stats = jsonDecode(responses[0].body);
-        ratings = jsonDecode(responses[1].body);
-        diaryEntries = jsonDecode(responses[2].body);
-        badges = jsonDecode(responses[3].body);
-        bookmarks = jsonDecode(responses[4].body);
-        friends = jsonDecode(responses[5].body);
-      });
+      if (mounted) {
+        setState(() {
+          stats = jsonDecode(responses[0].body);
+          ratings = jsonDecode(responses[1].body);
+          diaryEntries = jsonDecode(responses[2].body);
+          badges = jsonDecode(responses[3].body);
+          bookmarks = jsonDecode(responses[4].body);
+          friends = jsonDecode(responses[5].body);
+        });
+      }
     } catch (_) {
       _toast('Failed to load profile data');
     } finally {
-      setState(() => loading = false);
+      if (mounted) {
+        setState(() => loading = false);
+      }
     }
   }
 
@@ -160,12 +171,14 @@ class _SocialPageState extends State<SocialPage>
   }
 
   void logout() {
-    widget.setUser(null);
-    Navigator.pushReplacementNamed(context, '/auth');
+    widget.onLogout();
+    context.go('/auth');
   }
 
   void _toast(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    }
   }
 
   // ---------------- UI ----------------
@@ -187,6 +200,8 @@ class _SocialPageState extends State<SocialPage>
           TabBar(
             controller: _tabController,
             indicatorColor: Colors.amber,
+            labelColor: Colors.amber,
+            unselectedLabelColor: Colors.white60,
             tabs: const [
               Tab(text: 'Ratings'),
               Tab(text: 'Diary'),
@@ -230,7 +245,7 @@ class _SocialPageState extends State<SocialPage>
             radius: 40,
             backgroundColor: Colors.amber,
             child: Text(
-              widget.user['name'][0],
+              widget.user['name'][0].toUpperCase(),
               style: const TextStyle(fontSize: 28, color: Colors.black),
             ),
           ),
@@ -240,17 +255,27 @@ class _SocialPageState extends State<SocialPage>
             style: const TextStyle(color: Colors.white, fontSize: 22),
           ),
           Text(
-            '@${widget.user['name'].toLowerCase()}',
+            '@${widget.user['name'].toLowerCase().replaceAll(' ', '')}',
             style: const TextStyle(color: Colors.white60),
           ),
           const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _stat('Ratings', stats['ratings_count']),
-              _stat('Friends', stats['friends_count']),
+              _stat('Ratings', stats['ratings_count'] ?? 0),
+              _stat('Friends', stats['friends_count'] ?? 0),
               _stat('Badges', badges.where((b) => b['earned'] == true).length),
             ],
+          ),
+          const SizedBox(height: 12),
+          ElevatedButton.icon(
+            onPressed: logout,
+            icon: const Icon(Icons.logout, size: 16),
+            label: const Text('Logout'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
           ),
         ],
       ),
@@ -283,9 +308,16 @@ class _SocialPageState extends State<SocialPage>
       itemBuilder: (_, i) {
         final r = ratings[i];
         return ListTile(
-          leading: Image.network(r['beverage']['image']),
+          leading: r['beverage']?['image'] != null
+              ? Image.network(
+                  r['beverage']['image'],
+                  width: 50,
+                  height: 50,
+                  fit: BoxFit.cover,
+                )
+              : const Icon(Icons.local_bar, color: Colors.white),
           title: Text(
-            r['beverage']['name'],
+            r['beverage']?['name'] ?? 'Unknown',
             style: const TextStyle(color: Colors.white),
           ),
           subtitle: Text(
@@ -316,15 +348,20 @@ class _SocialPageState extends State<SocialPage>
       itemBuilder: (_, i) {
         final d = diaryEntries[i];
         return ListTile(
-          leading: d['photo'] != null && d['photo'] != ''
-              ? Image.network(d['photo'])
+          leading: d['photo'] != null && d['photo'].toString().isNotEmpty
+              ? Image.network(
+                  d['photo'],
+                  width: 50,
+                  height: 50,
+                  fit: BoxFit.cover,
+                )
               : const Icon(Icons.local_bar, color: Colors.white),
           title: Text(
-            d['beverage_name'],
+            d['beverage_name'] ?? 'Unknown',
             style: const TextStyle(color: Colors.white),
           ),
           subtitle: Text(
-            d['restaurant'],
+            d['restaurant'] ?? '',
             style: const TextStyle(color: Colors.white60),
           ),
           onTap: () {
@@ -341,8 +378,8 @@ class _SocialPageState extends State<SocialPage>
 
   Widget _badgesTab() {
     final filtered = badges.where((b) {
-      if (badgeFilter == 'earned') return b['earned'];
-      if (badgeFilter == 'in_progress') return !b['earned'];
+      if (badgeFilter == 'earned') return b['earned'] == true;
+      if (badgeFilter == 'in_progress') return b['earned'] != true;
       return true;
     }).toList();
 
@@ -351,12 +388,18 @@ class _SocialPageState extends State<SocialPage>
       padding: const EdgeInsets.all(12),
       children: filtered.map((b) {
         return Card(
-          color: b['earned'] ? Colors.amber.withOpacity(.3) : Colors.grey[900],
+          color: b['earned'] == true
+              ? Colors.amber.withOpacity(.3)
+              : Colors.grey[900],
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(b['icon'], style: const TextStyle(fontSize: 32)),
-              Text(b['name'], style: const TextStyle(color: Colors.white)),
+              Text(b['icon'] ?? '🏆', style: const TextStyle(fontSize: 32)),
+              const SizedBox(height: 8),
+              Text(
+                b['name'] ?? 'Badge',
+                style: const TextStyle(color: Colors.white),
+              ),
             ],
           ),
         );
@@ -365,17 +408,30 @@ class _SocialPageState extends State<SocialPage>
   }
 
   Widget _savesTab() {
+    if (bookmarks.isEmpty) {
+      return const Center(
+        child: Text('No bookmarks', style: TextStyle(color: Colors.white60)),
+      );
+    }
+
     return ListView(
       children: bookmarks
           .map(
             (r) => ListTile(
-              leading: Image.network(r['image']),
+              leading: r['image'] != null
+                  ? Image.network(
+                      r['image'],
+                      width: 50,
+                      height: 50,
+                      fit: BoxFit.cover,
+                    )
+                  : const Icon(Icons.restaurant, color: Colors.white),
               title: Text(
-                r['name'],
+                r['name'] ?? 'Unknown',
                 style: const TextStyle(color: Colors.white),
               ),
               subtitle: Text(
-                r['area'],
+                r['area'] ?? '',
                 style: const TextStyle(color: Colors.white60),
               ),
             ),
@@ -385,20 +441,29 @@ class _SocialPageState extends State<SocialPage>
   }
 
   Widget _friendsTab() {
+    if (friends.isEmpty) {
+      return const Center(
+        child: Text('No friends yet', style: TextStyle(color: Colors.white60)),
+      );
+    }
+
     return ListView(
       children: friends
           .map(
             (f) => ListTile(
               leading: CircleAvatar(
                 backgroundColor: Colors.purple,
-                child: Text(f['name'][0]),
+                child: Text(
+                  f['name']?[0]?.toUpperCase() ?? 'F',
+                  style: const TextStyle(color: Colors.white),
+                ),
               ),
               title: Text(
-                f['name'],
+                f['name'] ?? 'Unknown',
                 style: const TextStyle(color: Colors.white),
               ),
               subtitle: Text(
-                '@${f['name'].toLowerCase()}',
+                '@${f['name']?.toLowerCase()?.replaceAll(' ', '') ?? 'unknown'}',
                 style: const TextStyle(color: Colors.white60),
               ),
             ),
