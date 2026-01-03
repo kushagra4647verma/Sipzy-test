@@ -16,7 +16,7 @@ class ExpertDashboard extends StatefulWidget {
 }
 
 class _ExpertDashboardState extends State<ExpertDashboard> {
-  static const API = String.fromEnvironment('API_URL');
+  static const api = String.fromEnvironment('API_URL');
 
   List assignedRestaurants = [];
   Map<String, dynamic> recentlyRated = {'weekly_count': 0, 'restaurants': []};
@@ -41,12 +41,12 @@ class _ExpertDashboardState extends State<ExpertDashboard> {
     try {
       final responses = await Future.wait([
         http.get(
-          Uri.parse('$API/expert/${widget.expert['id']}/assigned-restaurants'),
+          Uri.parse('$api/expert/${widget.expert['id']}/assigned-restaurants'),
         ),
         http.get(
-          Uri.parse('$API/expert/${widget.expert['id']}/recently-rated'),
+          Uri.parse('$api/expert/${widget.expert['id']}/recently-rated'),
         ),
-        http.get(Uri.parse('$API/expert/${widget.expert['id']}/stats')),
+        http.get(Uri.parse('$api/expert/${widget.expert['id']}/stats')),
       ]);
 
       setState(() {
@@ -130,8 +130,8 @@ class _ExpertDashboardState extends State<ExpertDashboard> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppColors.secondary.withOpacity(0.4)),
-              color: AppColors.secondary.withOpacity(0.15),
+              border: Border.all(color: AppColors.secondary.withValues(alpha: 0.4)),
+              color: AppColors.secondary.withValues(alpha: 0.15),
             ),
             child: Row(
               children: const [
@@ -213,7 +213,7 @@ class _ExpertDashboardState extends State<ExpertDashboard> {
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: color.withOpacity(0.2),
+                color: color.withValues(alpha: 0.2),
               ),
               child: Icon(icon, color: color, size: 20),
             ),
@@ -399,7 +399,7 @@ class _ExpertDashboardState extends State<ExpertDashboard> {
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: AppColors.primary.withOpacity(0.2),
+                  color: AppColors.primary.withValues(alpha: 0.2),
                 ),
                 child: const Icon(Icons.star, color: AppColors.primary),
               ),

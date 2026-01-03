@@ -5,9 +5,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme/colors.dart';
 import '../../core/theme/radius.dart';
-import '../../shared/ui/share_modal.dart';
-import '../../shared/ui/invite_friends_modal.dart';
-import '../../shared/ui/group_mix_magic.dart';
 import 'package:go_router/go_router.dart';
 
 class RestaurantDetail extends StatefulWidget {
@@ -25,7 +22,7 @@ class RestaurantDetail extends StatefulWidget {
 }
 
 class _RestaurantDetailState extends State<RestaurantDetail> {
-  static const API = String.fromEnvironment('API_URL');
+  static const api = String.fromEnvironment('API_URL');
 
   Map<String, dynamic>? restaurant;
   List beverages = [];
@@ -66,7 +63,7 @@ class _RestaurantDetailState extends State<RestaurantDetail> {
 
     try {
       final res = await http.get(
-        Uri.parse('$API/restaurants/${widget.restaurantId}'),
+        Uri.parse('$api/restaurants/${widget.restaurantId}'),
       );
       final data = jsonDecode(res.body);
 
@@ -86,7 +83,7 @@ class _RestaurantDetailState extends State<RestaurantDetail> {
   Future<void> checkBookmark() async {
     final res = await http.get(
       Uri.parse(
-        '$API/bookmarks/check/${widget.user['id']}/${widget.restaurantId}',
+        '$api/bookmarks/check/${widget.user['id']}/${widget.restaurantId}',
       ),
     );
     final data = jsonDecode(res.body);
@@ -95,7 +92,7 @@ class _RestaurantDetailState extends State<RestaurantDetail> {
 
   Future<void> toggleBookmark() async {
     final res = await http.post(
-      Uri.parse('$API/bookmarks'),
+      Uri.parse('$api/bookmarks'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'user_id': widget.user['id'],

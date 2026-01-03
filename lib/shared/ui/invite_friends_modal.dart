@@ -21,7 +21,7 @@ class InviteFriendsModal extends StatefulWidget {
 }
 
 class _InviteFriendsModalState extends State<InviteFriendsModal> {
-  static const API = String.fromEnvironment('API_URL');
+  static const api = String.fromEnvironment('API_URL');
 
   List friends = [];
   List<int> selectedFriends = [];
@@ -43,7 +43,7 @@ class _InviteFriendsModalState extends State<InviteFriendsModal> {
   Future<void> fetchFriends() async {
     try {
       final res = await http.get(
-        Uri.parse('$API/friends/${widget.user['id']}'),
+        Uri.parse('$api/friends/${widget.user['id']}'),
       );
       setState(() => friends = jsonDecode(res.body));
     } catch (_) {

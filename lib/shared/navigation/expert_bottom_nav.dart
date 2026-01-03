@@ -39,9 +39,9 @@ class ExpertBottomNav extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.75),
+            color: Colors.black.withValues(alpha: 0.75),
             borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: Colors.purple.withOpacity(0.4)),
+            border: Border.all(color: Colors.purple.withValues(alpha: 0.4)),
             boxShadow: const [
               BoxShadow(
                 color: Colors.black54,

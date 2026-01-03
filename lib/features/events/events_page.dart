@@ -13,7 +13,7 @@ class EventsPage extends StatefulWidget {
 }
 
 class _EventsPageState extends State<EventsPage> {
-  static const API = String.fromEnvironment('API_URL');
+  static const api = String.fromEnvironment('API_URL');
 
   List events = [];
   bool loading = true;
@@ -29,7 +29,7 @@ class _EventsPageState extends State<EventsPage> {
     setState(() => loading = true);
     try {
       final query = searchQuery.isNotEmpty ? '?search=$searchQuery' : '';
-      final res = await http.get(Uri.parse('$API/events$query'));
+      final res = await http.get(Uri.parse('$api/events$query'));
       setState(() => events = jsonDecode(res.body));
     } catch (_) {
       _toast('Failed to load events');

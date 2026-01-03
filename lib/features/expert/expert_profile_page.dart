@@ -22,7 +22,7 @@ class ExpertProfilePage extends StatefulWidget {
 }
 
 class _ExpertProfilePageState extends State<ExpertProfilePage> {
-  static const API = String.fromEnvironment('API_URL');
+  static const api = String.fromEnvironment('API_URL');
 
   Map<String, dynamic> stats = {
     'total_ratings': 0,
@@ -60,7 +60,7 @@ class _ExpertProfilePageState extends State<ExpertProfilePage> {
   Future<void> fetchStats() async {
     try {
       final res = await http.get(
-        Uri.parse('$API/expert/${widget.expert['id']}/stats'),
+        Uri.parse('$api/expert/${widget.expert['id']}/stats'),
       );
       if (res.statusCode == 200) {
         setState(() => stats = jsonDecode(res.body));
@@ -80,7 +80,7 @@ class _ExpertProfilePageState extends State<ExpertProfilePage> {
 
     try {
       final res = await http.put(
-        Uri.parse('$API/expert/${widget.expert['id']}'),
+        Uri.parse('$api/expert/${widget.expert['id']}'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'name': nameCtrl.text.trim(),
@@ -196,9 +196,9 @@ class _ExpertProfilePageState extends State<ExpertProfilePage> {
       margin: const EdgeInsets.only(top: 6),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.secondary.withOpacity(0.15),
+        color: AppColors.secondary.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.secondary.withOpacity(0.4)),
+        border: Border.all(color: AppColors.secondary.withValues(alpha: 0.4)),
       ),
       child: const Row(
         mainAxisSize: MainAxisSize.min,

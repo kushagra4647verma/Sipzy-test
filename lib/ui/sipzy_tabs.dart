@@ -109,7 +109,7 @@ class SipzyTabTrigger extends StatelessWidget {
           color: isActive ? Colors.black : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           boxShadow: isActive
-              ? [BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 6)]
+              ? [BoxShadow(color: Colors.black.withValues(alpha: 0.4), blurRadius: 6)]
               : [],
         ),
         child: Center(

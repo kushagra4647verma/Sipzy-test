@@ -10,11 +10,11 @@ class AppTheme {
     colorScheme: ColorScheme.dark(
       primary: AppColors.primary,
       secondary: AppColors.secondary,
-      background: AppColors.background,
+      surface: AppColors.background,
       error: AppColors.destructive,
     ),
 
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       color: AppColors.card,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadius.lg),

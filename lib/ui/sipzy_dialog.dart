@@ -17,7 +17,7 @@ class SipzyDialog extends StatelessWidget {
     return showDialog(
       context: context,
       barrierDismissible: dismissible,
-      barrierColor: Colors.black.withOpacity(0.8),
+      barrierColor: Colors.black.withValues(alpha: 0.8),
       builder: (_) => SipzyDialog(child: child),
     );
   }

@@ -1,14 +1,11 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme/colors.dart';
 import '../../core/theme/radius.dart';
-import '../../shared/ui/share_modal.dart';
 import 'package:go_router/go_router.dart';
 
 class BeverageDetailPage extends StatefulWidget {
@@ -26,7 +23,7 @@ class BeverageDetailPage extends StatefulWidget {
 }
 
 class _BeverageDetailPageState extends State<BeverageDetailPage> {
-  static const API = String.fromEnvironment('API_URL');
+  static const api = String.fromEnvironment('API_URL');
 
   Map<String, dynamic>? beverage;
   bool loading = true;
@@ -52,7 +49,7 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
 
     try {
       final res = await http.get(
-        Uri.parse('$API/beverages/${widget.beverageId}'),
+        Uri.parse('$api/beverages/${widget.beverageId}'),
       );
       setState(() => beverage = jsonDecode(res.body));
     } catch (_) {
@@ -72,7 +69,7 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
 
     try {
       await http.post(
-        Uri.parse('$API/beverages/${widget.beverageId}/rate'),
+        Uri.parse('$api/beverages/${widget.beverageId}/rate'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'user_id': widget.user['id'],
@@ -104,7 +101,7 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
 
     final request = http.MultipartRequest(
       'POST',
-      Uri.parse('$API/beverages/${widget.beverageId}/upload-photo'),
+      Uri.parse('$api/beverages/${widget.beverageId}/upload-photo'),
     );
 
     request.files.add(await http.MultipartFile.fromPath('file', image.path));

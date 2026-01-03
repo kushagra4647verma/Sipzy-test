@@ -3,9 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 import '../../shared/navigation/bottom_nav.dart';
-import '../../shared/ui/share_modal.dart';
 import '../../core/theme/colors.dart';
-import '../../core/theme/radius.dart';
 
 class HomePage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -16,7 +14,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  static const API = String.fromEnvironment('API_URL');
+  static const api = String.fromEnvironment('API_URL');
 
   // data
   List restaurants = [];
@@ -82,7 +80,7 @@ class _HomePageState extends State<HomePage> {
       'sort_by': sortBy,
     };
 
-    final uri = Uri.parse('$API/restaurants').replace(queryParameters: query);
+    final uri = Uri.parse('$api/restaurants').replace(queryParameters: query);
     final res = await http.get(uri);
 
     if (res.statusCode == 200) {
@@ -90,8 +88,8 @@ class _HomePageState extends State<HomePage> {
     }
 
     if (searchQuery.isEmpty && !_hasActiveFilters) {
-      featuredRestaurants = await _fetchList('$API/restaurants/featured');
-      trendingRestaurants = await _fetchList('$API/restaurants/trending');
+      featuredRestaurants = await _fetchList('$api/restaurants/featured');
+      trendingRestaurants = await _fetchList('$api/restaurants/trending');
     }
 
     setState(() => loading = false);
@@ -105,7 +103,7 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> fetchBookmarks() async {
     final res = await http.get(
-      Uri.parse('$API/bookmarks/${widget.user['id']}'),
+      Uri.parse('$api/bookmarks/${widget.user['id']}'),
     );
     if (res.statusCode == 200) {
       bookmarkedIds = List.from(jsonDecode(res.body).map((e) => e['id']));

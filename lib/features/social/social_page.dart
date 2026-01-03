@@ -16,7 +16,7 @@ class SocialPage extends StatefulWidget {
 
 class _SocialPageState extends State<SocialPage>
     with SingleTickerProviderStateMixin {
-  static const API = String.fromEnvironment('API_URL');
+  static const api = String.fromEnvironment('API_URL');
 
   late TabController _tabController;
 
@@ -68,12 +68,12 @@ class _SocialPageState extends State<SocialPage>
 
     try {
       final responses = await Future.wait([
-        http.get(Uri.parse('$API/users/${widget.user['id']}/stats')),
-        http.get(Uri.parse('$API/users/${widget.user['id']}/ratings')),
-        http.get(Uri.parse('$API/diary/${widget.user['id']}')),
-        http.get(Uri.parse('$API/users/${widget.user['id']}/badges')),
-        http.get(Uri.parse('$API/bookmarks/${widget.user['id']}')),
-        http.get(Uri.parse('$API/friends/${widget.user['id']}')),
+        http.get(Uri.parse('$api/users/${widget.user['id']}/stats')),
+        http.get(Uri.parse('$api/users/${widget.user['id']}/ratings')),
+        http.get(Uri.parse('$api/diary/${widget.user['id']}')),
+        http.get(Uri.parse('$api/users/${widget.user['id']}/badges')),
+        http.get(Uri.parse('$api/bookmarks/${widget.user['id']}')),
+        http.get(Uri.parse('$api/friends/${widget.user['id']}')),
       ]);
 
       if (mounted) {
@@ -106,7 +106,7 @@ class _SocialPageState extends State<SocialPage>
     }
 
     await http.post(
-      Uri.parse('$API/diary/add'),
+      Uri.parse('$api/diary/add'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'user_id': widget.user['id'], ...diaryForm}),
     );
@@ -118,7 +118,7 @@ class _SocialPageState extends State<SocialPage>
 
   Future<void> updateDiary() async {
     await http.put(
-      Uri.parse('$API/diary/entry/${selectedDiary!['id']}'),
+      Uri.parse('$api/diary/entry/${selectedDiary!['id']}'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(diaryForm),
     );
@@ -129,7 +129,7 @@ class _SocialPageState extends State<SocialPage>
   }
 
   Future<void> deleteDiary() async {
-    await http.delete(Uri.parse('$API/diary/entry/${selectedDiary!['id']}'));
+    await http.delete(Uri.parse('$api/diary/entry/${selectedDiary!['id']}'));
 
     _toast('Diary deleted');
     resetDiary();
@@ -143,7 +143,7 @@ class _SocialPageState extends State<SocialPage>
 
     final req = http.MultipartRequest(
       'POST',
-      Uri.parse('$API/diary/upload-photo'),
+      Uri.parse('$api/diary/upload-photo'),
     );
     req.files.add(await http.MultipartFile.fromPath('file', file.path));
 
@@ -389,7 +389,7 @@ class _SocialPageState extends State<SocialPage>
       children: filtered.map((b) {
         return Card(
           color: b['earned'] == true
-              ? Colors.amber.withOpacity(.3)
+              ? Colors.amber.withValues(alpha: .3)
               : Colors.grey[900],
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,

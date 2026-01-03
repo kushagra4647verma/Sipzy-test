@@ -17,7 +17,7 @@ class AuthPage extends StatefulWidget {
 }
 
 class _AuthPageState extends State<AuthPage> {
-  static const API = String.fromEnvironment('API_URL');
+  static const api = String.fromEnvironment('API_URL');
 
   AuthStep step = AuthStep.phone;
 
@@ -48,7 +48,7 @@ class _AuthPageState extends State<AuthPage> {
 
     try {
       final res = await http.post(
-        Uri.parse('$API/auth/send-otp'),
+        Uri.parse('$api/auth/send-otp'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'phone': phone}),
       );
@@ -77,7 +77,7 @@ class _AuthPageState extends State<AuthPage> {
 
     try {
       final res = await http.post(
-        Uri.parse('$API/auth/verify-otp'),
+        Uri.parse('$api/auth/verify-otp'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'phone': phone, 'otp': otp}),
       );
@@ -117,7 +117,7 @@ class _AuthPageState extends State<AuthPage> {
 
     try {
       final res = await http.post(
-        Uri.parse('$API/auth/signup'),
+        Uri.parse('$api/auth/signup'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'name': name, 'age': int.parse(age), 'phone': phone}),
       );

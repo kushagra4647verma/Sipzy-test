@@ -47,7 +47,7 @@ class SipzyButton extends StatelessWidget {
         side: _border(colors),
       ),
     ).copyWith(
-      overlayColor: MaterialStateProperty.all(Colors.white.withOpacity(0.08)),
+      overlayColor: WidgetStateProperty.all(Colors.white.withValues(alpha: 0.08)),
     );
   }
 

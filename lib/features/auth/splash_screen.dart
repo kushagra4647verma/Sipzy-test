@@ -111,7 +111,7 @@ class _SplashScreenState extends State<SplashScreen>
                             foreground: Paint()
                               ..shader = LinearGradient(
                                 colors: [Color(0xFFFFB000), Color(0xFFFFD166)],
-                              ).createShader(const Rect.fromLTWH(0, 0, 100, 0)),
+                              ).createShader(Rect.fromLTWH(0, 0, 100, 0)),
                           ),
                         ),
                         TextSpan(
@@ -120,7 +120,7 @@ class _SplashScreenState extends State<SplashScreen>
                             foreground: Paint()
                               ..shader = LinearGradient(
                                 colors: [Color(0xFF7C3AED), Color(0xFFA855F7)],
-                              ).createShader(const Rect.fromLTWH(0, 0, 100, 0)),
+                              ).createShader(Rect.fromLTWH(0, 0, 100, 0)),
                           ),
                         ),
                       ],

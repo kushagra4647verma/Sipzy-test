@@ -12,7 +12,7 @@ class GamesPage extends StatefulWidget {
 }
 
 class _GamesPageState extends State<GamesPage> {
-  static const API = String.fromEnvironment('API_URL');
+  static const api = String.fromEnvironment('API_URL');
 
   List games = [];
   String searchQuery = '';
@@ -36,7 +36,7 @@ class _GamesPageState extends State<GamesPage> {
     setState(() => loading = true);
     try {
       final query = searchQuery.isNotEmpty ? '?search=$searchQuery' : '';
-      final res = await http.get(Uri.parse('$API/games$query'));
+      final res = await http.get(Uri.parse('$api/games$query'));
       setState(() => games = jsonDecode(res.body));
     } catch (_) {
       _toast('Failed to load games');
