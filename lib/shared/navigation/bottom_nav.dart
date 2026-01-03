@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 class BottomNav extends StatelessWidget {
   final String active;
@@ -6,9 +7,7 @@ class BottomNav extends StatelessWidget {
   const BottomNav({super.key, required this.active});
 
   void _navigate(BuildContext context, String route) {
-    if (ModalRoute.of(context)?.settings.name != route) {
-      Navigator.pushReplacementNamed(context, route);
-    }
+    context.go(route);
   }
 
   @override

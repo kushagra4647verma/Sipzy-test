@@ -189,3 +189,212 @@ class _HomePageState extends State<HomePage> {
     );
   }
 }
+
+class _Header extends StatelessWidget {
+  final String searchQuery;
+  final ValueChanged<String> onSearch;
+  final VoidCallback onFilterTap;
+
+  const _Header({
+    required this.searchQuery,
+    required this.onSearch,
+    required this.onFilterTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          TextField(
+            onChanged: onSearch,
+            decoration: InputDecoration(
+              hintText: 'Search restaurants...',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.filter_list),
+                onPressed: onFilterTap,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  final VoidCallback onClear;
+  final bool hasFilters;
+
+  const _EmptyState({required this.onClear, required this.hasFilters});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.restaurant, size: 64, color: Colors.white24),
+          const SizedBox(height: 16),
+          const Text('No restaurants found'),
+          if (hasFilters)
+            TextButton(onPressed: onClear, child: const Text('Clear Filters')),
+        ],
+      ),
+    );
+  }
+}
+
+class _HorizontalSection extends StatelessWidget {
+  final String title;
+  final List restaurants;
+
+  const _HorizontalSection(this.title, this.restaurants);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            title,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+        ),
+        SizedBox(
+          height: 200,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: restaurants.length,
+            itemBuilder: (context, index) {
+              final restaurant = restaurants[index];
+              return Container(
+                width: 160,
+                margin: const EdgeInsets.only(right: 12),
+                child: Card(
+                  child: Column(
+                    children: [
+                      Image.network(
+                        restaurant['image'],
+                        height: 100,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Text(
+                          restaurant['name'],
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _GridSection extends StatelessWidget {
+  final String title;
+  final List restaurants;
+  final List<int> bookmarkedIds;
+  final Function(Map) onShare;
+
+  const _GridSection({
+    required this.title,
+    required this.restaurants,
+    required this.bookmarkedIds,
+    required this.onShare,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            title,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+        ),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            childAspectRatio: 0.75,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+          ),
+          itemCount: restaurants.length,
+          itemBuilder: (context, index) {
+            final restaurant = restaurants[index];
+            final isBookmarked = bookmarkedIds.contains(restaurant['id']);
+
+            return Card(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Stack(
+                    children: [
+                      Image.network(
+                        restaurant['image'],
+                        height: 120,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                      ),
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: IconButton(
+                          icon: Icon(
+                            isBookmarked
+                                ? Icons.bookmark
+                                : Icons.bookmark_border,
+                          ),
+                          onPressed: () {},
+                        ),
+                      ),
+                    ],
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          restaurant['name'],
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          restaurant['area'] ?? '',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+}

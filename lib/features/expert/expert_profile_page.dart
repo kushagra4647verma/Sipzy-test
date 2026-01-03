@@ -60,12 +60,8 @@ class _ExpertProfilePageState extends State<ExpertProfilePage> {
   }
 
   void logout() {
-    widget.onExpertChanged(null);
-    Navigator.pushReplacementNamed(context, '/expert/auth');
-
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Logged out successfully')));
+    onLogout();
+    context.go('/expert/auth');
   }
 
   Future<void> saveProfile() async {

@@ -1,3 +1,7 @@
+import 'package:flutter/material.dart';
+import '../../core/theme/colors.dart';
+import '../../core/theme/radius.dart';
+
 class RestaurantCard extends StatelessWidget {
   final Map restaurant;
   final bool bookmarked;

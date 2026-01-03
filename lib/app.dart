@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-
+import 'package:flutter/material.dart';
 import 'services/auth_state.dart';
 
 // Pages
@@ -74,11 +74,16 @@ class _SipZyAppState extends State<SipZyApp> {
       return null;
     },
     routes: [
-      GoRoute(path: '/splash', builder: (_, __) => const SplashScreen()),
+      GoRoute(
+        path: '/splash',
+        name: 'splash',
+        builder: (_, __) => const SplashScreen(),
+      ),
 
       /// ---------------- Customer ----------------
       GoRoute(
         path: '/auth',
+        name: 'auth',
         builder: (_, __) => AuthPage(
           onLogin: (user) {
             auth.user = user;
@@ -87,15 +92,18 @@ class _SipZyAppState extends State<SipZyApp> {
       ),
       GoRoute(
         path: '/',
+        name: '',
         builder: (_, __) => HomePage(user: auth.user!),
       ),
       GoRoute(
         path: '/restaurant/:id',
+        name: 'restaurant',
         builder: (_, state) =>
             RestaurantDetail(id: state.pathParameters['id']!, user: auth.user!),
       ),
       GoRoute(
         path: '/beverage/:id',
+        name: 'beverage',
         builder: (_, state) =>
             BeverageDetail(id: state.pathParameters['id']!, user: auth.user!),
       ),
