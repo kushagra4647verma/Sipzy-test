@@ -201,7 +201,7 @@ class _GamesPageState extends State<GamesPage> {
         crossAxisSpacing: 16,
         mainAxisSpacing: 16,
       ),
-      itemBuilder: (_, __) => Container(
+      itemBuilder: (context, index) => Container(
         decoration: BoxDecoration(
           color: Colors.white10,
           borderRadius: BorderRadius.circular(20),

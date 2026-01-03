@@ -277,7 +277,7 @@ class _ExpertDashboardState extends State<ExpertDashboard> {
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: assignedRestaurants.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 16),
+                separatorBuilder: (context, index) => const SizedBox(width: 16),
                 itemBuilder: (_, i) => _assignedCard(assignedRestaurants[i]),
               ),
             ),

@@ -293,7 +293,7 @@ class _EventsPageState extends State<EventsPage> {
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: 3,
-      itemBuilder: (_, __) => Container(
+      itemBuilder: (context, index) => Container(
         margin: const EdgeInsets.only(bottom: 16),
         height: 240,
         decoration: BoxDecoration(

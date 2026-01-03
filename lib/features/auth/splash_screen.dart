@@ -76,7 +76,7 @@ class _SplashScreenState extends State<SplashScreen>
                     children: [
                       AnimatedBuilder(
                         animation: _pulseController,
-                        builder: (_, __) => Container(
+                        builder: (context, child) => Container(
                           width: 140,
                           height: 140,
                           decoration: BoxDecoration(
@@ -109,11 +109,19 @@ class _SplashScreenState extends State<SplashScreen>
                           text: 'Sip',
                           style: TextStyle(
                             foreground: Paint()
-                              ..shader = LinearGradient(
-                                colors: [Color(0xFFFFB000), Color(0xFFFFD166)],
-                              ).createShader(Rect.fromLTWH(0, 0, 100, 0)),
+                              ..shader =
+                                  const LinearGradient(
+                                    colors: [
+                                      Color(0xFFFFB000),
+                                      Color(0xFFFFD166),
+                                    ],
+                                  ).createShader(
+                                    Rect.fromLTWH(0, 0, 100, 0),
+                                  ), // ✅ No const
                           ),
                         ),
+
+                        // Repeat for line 120 (the 'Zy' TextSpan)
                         TextSpan(
                           text: 'Zy',
                           style: TextStyle(
@@ -169,7 +177,7 @@ class _GlowBlob extends StatelessWidget {
       alignment: alignment,
       child: AnimatedBuilder(
         animation: controller,
-        builder: (_, __) {
+        builder: (context, child) {
           final value = delay ? (1 - controller.value) : controller.value;
 
           return Container(
@@ -178,10 +186,10 @@ class _GlowBlob extends StatelessWidget {
             margin: const EdgeInsets.all(64),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: color.withOpacity(0.4 * value),
+              color: color.withValues(alpha: 0.4 * value),
               boxShadow: [
                 BoxShadow(
-                  color: color.withOpacity(0.6 * value),
+                  color: color.withValues(alpha: 0.6 * value),
                   blurRadius: 120,
                   spreadRadius: 40,
                 ),

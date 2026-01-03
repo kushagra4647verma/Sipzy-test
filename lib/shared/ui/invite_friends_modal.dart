@@ -163,7 +163,7 @@ class _InviteFriendsModalState extends State<InviteFriendsModal> {
 
     return ListView.separated(
       itemCount: filteredFriends.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      separatorBuilder: (context, index) => const SizedBox(height: 8),
       itemBuilder: (_, i) {
         final friend = filteredFriends[i];
         final selected = selectedFriends.contains(friend['id']);

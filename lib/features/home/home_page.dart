@@ -106,7 +106,10 @@ class _HomePageState extends State<HomePage> {
       Uri.parse('$api/bookmarks/${widget.user['id']}'),
     );
     if (res.statusCode == 200) {
-      bookmarkedIds = List.from(jsonDecode(res.body).map((e) => e['id']));
+      final decoded = jsonDecode(res.body);
+      if (decoded is List) {
+        bookmarkedIds = decoded.map((e) => (e['id'] as num).toInt()).toList();
+      }
     }
   }
 

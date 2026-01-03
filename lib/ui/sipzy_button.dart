@@ -47,7 +47,9 @@ class SipzyButton extends StatelessWidget {
         side: _border(colors),
       ),
     ).copyWith(
-      overlayColor: WidgetStateProperty.all(Colors.white.withValues(alpha: 0.08)),
+      overlayColor: WidgetStateProperty.all(
+        Colors.white.withValues(alpha: 0.08),
+      ),
     );
   }
 
@@ -89,7 +91,7 @@ class SipzyButton extends StatelessWidget {
 
   BorderSide _border(ColorScheme colors) {
     if (variant == ButtonVariant.outline) {
-      return BorderSide(color: Colors.white24);
+      return const BorderSide(color: Colors.white24);
     }
     return BorderSide.none;
   }
@@ -100,7 +102,9 @@ class SipzyButton extends StatelessWidget {
       case ButtonVariant.destructive:
       case ButtonVariant.secondary:
         return 2;
-      default:
+      case ButtonVariant.outline:
+      case ButtonVariant.ghost:
+      case ButtonVariant.link:
         return 0;
     }
   }
@@ -116,7 +120,6 @@ class SipzyButton extends StatelessWidget {
       case ButtonSize.icon:
         return const EdgeInsets.all(10);
       case ButtonSize.md:
-      default:
         return const EdgeInsets.symmetric(horizontal: 16, vertical: 10);
     }
   }
@@ -130,7 +133,6 @@ class SipzyButton extends StatelessWidget {
       case ButtonSize.icon:
         return const Size(40, 40);
       case ButtonSize.md:
-      default:
         return const Size(0, 36);
     }
   }

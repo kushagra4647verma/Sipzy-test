@@ -72,14 +72,14 @@ class _SipZyAppState extends State<SipZyApp> {
       GoRoute(
         path: '/splash',
         name: 'splash',
-        builder: (_, __) => const SplashScreen(),
+        builder: (context, state) => const SplashScreen(),
       ),
 
       /// ---------------- Customer ----------------
       GoRoute(
         path: '/auth',
         name: 'auth',
-        builder: (_, __) => AuthPage(
+        builder: (context, state) => AuthPage(
           onLogin: (user) {
             auth.user = user;
           },
@@ -88,7 +88,7 @@ class _SipZyAppState extends State<SipZyApp> {
       GoRoute(
         path: '/',
         name: 'home',
-        builder: (_, __) => HomePage(user: auth.user!),
+        builder: (context, state) => HomePage(user: auth.user!),
       ),
       GoRoute(
         path: '/restaurant/:id',
@@ -109,17 +109,17 @@ class _SipZyAppState extends State<SipZyApp> {
       GoRoute(
         path: '/games',
         name: 'games',
-        builder: (_, __) => GamesPage(user: auth.user!),
+        builder: (context, state) => GamesPage(user: auth.user!),
       ),
       GoRoute(
         path: '/events',
         name: 'events',
-        builder: (_, __) => EventsPage(user: auth.user!),
+        builder: (context, state) => EventsPage(user: auth.user!),
       ),
       GoRoute(
         path: '/social',
         name: 'social',
-        builder: (_, __) => SocialPage(
+        builder: (context, state) => SocialPage(
           user: auth.user!,
           onLogout: () {
             auth.user = null;
@@ -131,12 +131,12 @@ class _SipZyAppState extends State<SipZyApp> {
       GoRoute(
         path: '/expert',
         name: 'expert',
-        builder: (_, __) => ExpertDashboard(expert: auth.expert!),
+        builder: (context, state) => ExpertDashboard(expert: auth.expert!),
       ),
       GoRoute(
         path: '/expert/profile',
         name: 'expert-profile',
-        builder: (_, __) => ExpertProfilePage(
+        builder: (context, state) => ExpertProfilePage(
           expert: auth.expert!,
           onLogout: () {
             auth.expert = null;
