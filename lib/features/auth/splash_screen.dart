@@ -79,16 +79,16 @@ class _SplashScreenState extends State<SplashScreen>
                         builder: (context, child) => Container(
                           width: 140,
                           height: 140,
-                          decoration: BoxDecoration(
+                          decoration: const BoxDecoration(
                             shape: BoxShape.circle,
-                            gradient: const RadialGradient(
+                            gradient: RadialGradient(
                               colors: [Color(0xFFFFB000), Colors.transparent],
                             ),
                           ),
                         ),
                       ),
                       const Icon(
-                        Icons.local_drink_rounded, // GlassWater equivalent
+                        Icons.local_drink_rounded,
                         size: 96,
                         color: Colors.white,
                       ),
@@ -99,8 +99,8 @@ class _SplashScreenState extends State<SplashScreen>
 
                   // SipZy text
                   RichText(
-                    text: const TextSpan(
-                      style: TextStyle(
+                    text: TextSpan(
+                      style: const TextStyle(
                         fontSize: 56,
                         fontWeight: FontWeight.bold,
                       ),
@@ -109,24 +109,16 @@ class _SplashScreenState extends State<SplashScreen>
                           text: 'Sip',
                           style: TextStyle(
                             foreground: Paint()
-                              ..shader =
-                                  const LinearGradient(
-                                    colors: [
-                                      Color(0xFFFFB000),
-                                      Color(0xFFFFD166),
-                                    ],
-                                  ).createShader(
-                                    Rect.fromLTWH(0, 0, 100, 0),
-                                  ), // ✅ No const
+                              ..shader = const LinearGradient(
+                                colors: [Color(0xFFFFB000), Color(0xFFFFD166)],
+                              ).createShader(Rect.fromLTWH(0, 0, 100, 0)),
                           ),
                         ),
-
-                        // Repeat for line 120 (the 'Zy' TextSpan)
                         TextSpan(
                           text: 'Zy',
                           style: TextStyle(
                             foreground: Paint()
-                              ..shader = LinearGradient(
+                              ..shader = const LinearGradient(
                                 colors: [Color(0xFF7C3AED), Color(0xFFA855F7)],
                               ).createShader(Rect.fromLTWH(0, 0, 100, 0)),
                           ),

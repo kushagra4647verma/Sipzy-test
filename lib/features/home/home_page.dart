@@ -20,7 +20,7 @@ class _HomePageState extends State<HomePage> {
   List restaurants = [];
   List featuredRestaurants = [];
   List trendingRestaurants = [];
-  List bookmarkedIds = [];
+  List<int> bookmarkedIds = [];
 
   // ui state
   bool loading = true;
@@ -310,7 +310,7 @@ class _GridSection extends StatelessWidget {
   final String title;
   final List restaurants;
   final List<int> bookmarkedIds;
-  final Function(Map) onShare;
+  final void Function(Map<String, dynamic>) onShare;
 
   const _GridSection({
     required this.title,
@@ -343,7 +343,10 @@ class _GridSection extends StatelessWidget {
           ),
           itemCount: restaurants.length,
           itemBuilder: (context, index) {
-            final restaurant = restaurants[index];
+            final restaurant = Map<String, dynamic>.from(
+              restaurants[index] as Map,
+            );
+
             final isBookmarked = bookmarkedIds.contains(restaurant['id']);
 
             return Card(
