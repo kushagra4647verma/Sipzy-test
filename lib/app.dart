@@ -42,28 +42,33 @@ class _SipZyAppState extends State<SipZyApp> {
 
   late final GoRouter _router = GoRouter(
     initialLocation: '/',
-    refreshListenable: Listenable.merge([]),
+    refreshListenable: auth,
     redirect: (context, state) {
+      // Always show splash first
       if (showSplash) return '/splash';
 
       final location = state.matchedLocation;
       final isAuthRoute = location == '/auth';
       final isExpertAuth = location == '/expert/auth';
 
-      if (!auth.isUserLoggedIn &&
+      // Expert routes protection
+      if (!auth.isExpertLoggedIn &&
           location.startsWith('/expert') &&
           !isExpertAuth) {
         return '/expert/auth';
       }
 
+      // Customer routes protection
       if (!auth.isUserLoggedIn &&
           !location.startsWith('/expert') &&
           !isAuthRoute) {
         return '/auth';
       }
 
+      // Redirect to home if already logged in
       if (auth.isUserLoggedIn && isAuthRoute) return '/';
 
+      // Redirect to expert dashboard if already logged in
       if (auth.isExpertLoggedIn && isExpertAuth) return '/expert';
 
       return null;
@@ -81,7 +86,9 @@ class _SipZyAppState extends State<SipZyApp> {
         name: 'auth',
         builder: (context, state) => AuthPage(
           onLogin: (user) {
-            auth.user = user;
+            setState(() {
+              auth.user = user;
+            });
           },
         ),
       ),
@@ -122,12 +129,25 @@ class _SipZyAppState extends State<SipZyApp> {
         builder: (context, state) => SocialPage(
           user: auth.user!,
           onLogout: () {
-            auth.user = null;
+            setState(() {
+              auth.user = null;
+            });
           },
         ),
       ),
 
       /// ---------------- Expert ----------------
+      GoRoute(
+        path: '/expert/auth',
+        name: 'expert-auth',
+        builder: (context, state) => AuthPage(
+          onLogin: (expert) {
+            setState(() {
+              auth.expert = expert;
+            });
+          },
+        ),
+      ),
       GoRoute(
         path: '/expert',
         name: 'expert',
@@ -139,7 +159,9 @@ class _SipZyAppState extends State<SipZyApp> {
         builder: (context, state) => ExpertProfilePage(
           expert: auth.expert!,
           onLogout: () {
-            auth.expert = null;
+            setState(() {
+              auth.expert = null;
+            });
           },
         ),
       ),
