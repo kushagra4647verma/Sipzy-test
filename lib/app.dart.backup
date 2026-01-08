@@ -17,10 +17,6 @@ import 'features/social/social_page.dart';
 // Expert
 import 'features/expert/expert_dashboard.dart';
 import 'features/expert/expert_profile_page.dart';
-import 'features/expert/expert_tasks_page.dart';
-
-// Theme
-import 'core/theme/app_theme.dart';
 
 class SipZyApp extends StatefulWidget {
   const SipZyApp({super.key});
@@ -32,72 +28,48 @@ class SipZyApp extends StatefulWidget {
 class _SipZyAppState extends State<SipZyApp> {
   final auth = AuthState();
   bool showSplash = true;
-  Timer? _splashTimer;
 
   @override
   void initState() {
     super.initState();
 
-    // Set splash to false after 2 seconds
-    _splashTimer = Timer(const Duration(seconds: 2), () {
+    Timer(const Duration(seconds: 2), () {
       if (mounted) {
-        setState(() {
-          showSplash = false;
-        });
+        setState(() => showSplash = false);
       }
     });
-  }
-
-  @override
-  void dispose() {
-    _splashTimer?.cancel();
-    super.dispose();
   }
 
   late final GoRouter _router = GoRouter(
     initialLocation: '/',
     refreshListenable: auth,
     redirect: (context, state) {
+      // Always show splash first
+      if (showSplash) return '/splash';
+
       final location = state.matchedLocation;
-
-      // Always show splash first (no redirect during splash)
-      if (showSplash && location != '/splash') {
-        return '/splash';
-      }
-
-      // Don't redirect if still on splash
-      if (location == '/splash') {
-        return null;
-      }
-
       final isAuthRoute = location == '/auth';
       final isExpertAuth = location == '/expert/auth';
 
       // Expert routes protection
-      if (location.startsWith('/expert') && !isExpertAuth) {
-        if (!auth.isExpertLoggedIn) {
-          return '/expert/auth';
-        }
-        return null;
+      if (!auth.isExpertLoggedIn &&
+          location.startsWith('/expert') &&
+          !isExpertAuth) {
+        return '/expert/auth';
       }
 
-      // Redirect expert to dashboard if already logged in
-      if (auth.isExpertLoggedIn && isExpertAuth) {
-        return '/expert';
+      // Customer routes protection
+      if (!auth.isUserLoggedIn &&
+          !location.startsWith('/expert') &&
+          !isAuthRoute) {
+        return '/auth';
       }
 
-      // Customer routes protection (exclude expert routes)
-      if (!location.startsWith('/expert') && !isAuthRoute) {
-        if (!auth.isUserLoggedIn) {
-          return '/auth';
-        }
-        return null;
-      }
+      // Redirect to home if already logged in
+      if (auth.isUserLoggedIn && isAuthRoute) return '/';
 
-      // Redirect customer to home if already logged in
-      if (auth.isUserLoggedIn && isAuthRoute) {
-        return '/';
-      }
+      // Redirect to expert dashboard if already logged in
+      if (auth.isExpertLoggedIn && isExpertAuth) return '/expert';
 
       return null;
     },
@@ -108,7 +80,7 @@ class _SipZyAppState extends State<SipZyApp> {
         builder: (context, state) => const SplashScreen(),
       ),
 
-      /// ---------------- Customer Routes ----------------
+      /// ---------------- Customer ----------------
       GoRoute(
         path: '/auth',
         name: 'auth',
@@ -164,7 +136,7 @@ class _SipZyAppState extends State<SipZyApp> {
         ),
       ),
 
-      /// ---------------- Expert Routes ----------------
+      /// ---------------- Expert ----------------
       GoRoute(
         path: '/expert/auth',
         name: 'expert-auth',
@@ -180,11 +152,6 @@ class _SipZyAppState extends State<SipZyApp> {
         path: '/expert',
         name: 'expert',
         builder: (context, state) => ExpertDashboard(expert: auth.expert!),
-      ),
-      GoRoute(
-        path: '/expert/tasks',
-        name: 'expert-tasks',
-        builder: (context, state) => ExpertTasksPage(expert: auth.expert!),
       ),
       GoRoute(
         path: '/expert/profile',
@@ -207,7 +174,7 @@ class _SipZyAppState extends State<SipZyApp> {
       title: 'SipZy',
       debugShowCheckedModeBanner: false,
       routerConfig: _router,
-      theme: AppTheme.darkTheme,
+      theme: ThemeData.dark(),
     );
   }
 }
