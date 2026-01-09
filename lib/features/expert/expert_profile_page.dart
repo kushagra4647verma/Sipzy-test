@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme/colors.dart';
 import '../../core/theme/radius.dart';
 import '../../shared/navigation/expert_bottom_nav.dart';
+import '../../config/env_config.dart';
 
 class ExpertProfilePage extends StatefulWidget {
   final Map<String, dynamic> expert;
@@ -22,7 +23,7 @@ class ExpertProfilePage extends StatefulWidget {
 }
 
 class _ExpertProfilePageState extends State<ExpertProfilePage> {
-  static const api = String.fromEnvironment('API_URL');
+  static const api = EnvConfig.apiBaseUrl;
 
   Map<String, dynamic> stats = {
     'total_ratings': 0,
@@ -176,9 +177,8 @@ class _ExpertProfilePageState extends State<ExpertProfilePage> {
               spacing: 8,
               runSpacing: 8,
               alignment: WrapAlignment.center,
-              children: tags
-                  .map<Widget>((t) => _tagChip(t.toString()))
-                  .toList(),
+              children:
+                  tags.map<Widget>((t) => _tagChip(t.toString())).toList(),
             ),
           ],
           const SizedBox(height: 12),

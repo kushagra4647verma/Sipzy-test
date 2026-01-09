@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import '../../config/env_config.dart';
 
 class InviteFriendsModal extends StatefulWidget {
   final bool open;
@@ -21,7 +22,7 @@ class InviteFriendsModal extends StatefulWidget {
 }
 
 class _InviteFriendsModalState extends State<InviteFriendsModal> {
-  static const api = String.fromEnvironment('API_URL');
+  static const api = EnvConfig.apiBaseUrl;
 
   List friends = [];
   List<int> selectedFriends = [];
@@ -175,9 +176,8 @@ class _InviteFriendsModalState extends State<InviteFriendsModal> {
             decoration: BoxDecoration(
               color: Colors.white10,
               borderRadius: BorderRadius.circular(16),
-              border: selected
-                  ? Border.all(color: Colors.purple, width: 2)
-                  : null,
+              border:
+                  selected ? Border.all(color: Colors.purple, width: 2) : null,
             ),
             child: Row(
               children: [

@@ -6,17 +6,18 @@ import 'config/env_config.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Check configuration
-  if (!EnvConfig.isConfigured) {
-    throw Exception(
-        'Please configure your Supabase credentials in lib/config/env_config.dart');
-  }
+  try {
+    // Initialize Supabase with error handling
+    await Supabase.initialize(
+      url: EnvConfig.supabaseUrl,
+      anonKey: EnvConfig.supabaseAnonKey,
+    );
 
-  // Initialize Supabase
-  await Supabase.initialize(
-    url: EnvConfig.supabaseUrl,
-    anonKey: EnvConfig.supabaseAnonKey,
-  );
+    print('✅ Supabase initialized successfully');
+  } catch (e) {
+    print('❌ Supabase initialization error: $e');
+    // Continue anyway - app can still work with API calls
+  }
 
   runApp(const SipZyApp());
 }

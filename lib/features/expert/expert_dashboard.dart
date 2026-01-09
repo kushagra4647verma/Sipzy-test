@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import '../../config/env_config.dart';
 
 import '../../core/theme/colors.dart';
 import '../../core/theme/radius.dart';
@@ -16,7 +17,7 @@ class ExpertDashboard extends StatefulWidget {
 }
 
 class _ExpertDashboardState extends State<ExpertDashboard> {
-  static const api = String.fromEnvironment('API_URL');
+  static const api = EnvConfig.apiBaseUrl;
 
   List assignedRestaurants = [];
   Map<String, dynamic> recentlyRated = {'weekly_count': 0, 'restaurants': []};
@@ -130,7 +131,8 @@ class _ExpertDashboardState extends State<ExpertDashboard> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppColors.secondary.withValues(alpha: 0.4)),
+              border:
+                  Border.all(color: AppColors.secondary.withValues(alpha: 0.4)),
               color: AppColors.secondary.withValues(alpha: 0.15),
             ),
             child: Row(

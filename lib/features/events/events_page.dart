@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
+import '../../config/env_config.dart';
 
 class EventsPage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -13,7 +14,7 @@ class EventsPage extends StatefulWidget {
 }
 
 class _EventsPageState extends State<EventsPage> {
-  static const api = String.fromEnvironment('API_URL');
+  static const api = EnvConfig.apiBaseUrl;
 
   List events = [];
   bool loading = true;
@@ -269,12 +270,10 @@ class _EventsPageState extends State<EventsPage> {
                   icon: const Icon(Icons.phone, size: 16),
                   label: const Text('Book Now'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: tag == 'Trending'
-                        ? Colors.purple
-                        : Colors.amber,
-                    foregroundColor: tag == 'Trending'
-                        ? Colors.white
-                        : Colors.black,
+                    backgroundColor:
+                        tag == 'Trending' ? Colors.purple : Colors.amber,
+                    foregroundColor:
+                        tag == 'Trending' ? Colors.white : Colors.black,
                     minimumSize: const Size.fromHeight(44),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),

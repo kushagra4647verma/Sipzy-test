@@ -31,26 +31,7 @@ class SipZyApp extends StatefulWidget {
 
 class _SipZyAppState extends State<SipZyApp> {
   final auth = AuthState();
-  Timer? _splashTimer;
-
-  @override
-  void initState() {
-    super.initState();
-
-    // Auto-navigate after splash
-    _splashTimer = Timer(const Duration(seconds: 2), () {
-      if (mounted) {
-        // This will trigger a navigation after splash
-        setState(() {});
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _splashTimer?.cancel();
-    super.dispose();
-  }
+  bool _splashComplete = false;
 
   late final GoRouter _router = GoRouter(
     initialLocation: '/splash',
@@ -58,7 +39,12 @@ class _SipZyAppState extends State<SipZyApp> {
     redirect: (context, state) {
       final location = state.matchedLocation;
 
-      // If on splash page, let the splash screen handle its own navigation
+      // Stay on splash until it completes
+      if (!_splashComplete && location != '/splash') {
+        return '/splash';
+      }
+
+      // Don't redirect if on splash
       if (location == '/splash') {
         return null;
       }
@@ -100,7 +86,7 @@ class _SipZyAppState extends State<SipZyApp> {
         name: 'splash',
         builder: (context, state) => SplashScreen(
           onComplete: () {
-            // Navigate to auth after splash completes
+            setState(() => _splashComplete = true);
             context.go('/auth');
           },
         ),
@@ -197,6 +183,33 @@ class _SipZyAppState extends State<SipZyApp> {
         ),
       ),
     ],
+    // Add error handling
+    errorBuilder: (context, state) => Scaffold(
+      backgroundColor: const Color(0xFF0A0A0A),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, size: 64, color: Colors.red),
+            const SizedBox(height: 16),
+            const Text(
+              'Page not found',
+              style: TextStyle(color: Colors.white, fontSize: 20),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              state.uri.toString(),
+              style: const TextStyle(color: Colors.white60),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: () => context.go('/splash'),
+              child: const Text('Go Home'),
+            ),
+          ],
+        ),
+      ),
+    ),
   );
 
   @override

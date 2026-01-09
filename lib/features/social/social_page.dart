@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:go_router/go_router.dart';
+import '../../config/env_config.dart';
 
 class SocialPage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -16,7 +17,7 @@ class SocialPage extends StatefulWidget {
 
 class _SocialPageState extends State<SocialPage>
     with SingleTickerProviderStateMixin {
-  static const api = String.fromEnvironment('API_URL');
+  static const api = EnvConfig.apiBaseUrl;
 
   late TabController _tabController;
 

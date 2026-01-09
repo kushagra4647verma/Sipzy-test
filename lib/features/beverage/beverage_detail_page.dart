@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/theme/colors.dart';
 import '../../core/theme/radius.dart';
 import 'package:go_router/go_router.dart';
+import '../../config/env_config.dart';
 
 class BeverageDetailPage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -23,7 +24,7 @@ class BeverageDetailPage extends StatefulWidget {
 }
 
 class _BeverageDetailPageState extends State<BeverageDetailPage> {
-  static const api = String.fromEnvironment('API_URL');
+  static const api = EnvConfig.apiBaseUrl;
 
   Map<String, dynamic>? beverage;
   bool loading = true;

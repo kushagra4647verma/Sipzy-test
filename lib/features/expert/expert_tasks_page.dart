@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../../core/theme/colors.dart';
 import '../../core/theme/radius.dart';
 import '../../shared/navigation/expert_bottom_nav.dart';
+import '../../config/env_config.dart';
 
 class ExpertTasksPage extends StatefulWidget {
   final Map<String, dynamic> expert;
@@ -16,7 +17,7 @@ class ExpertTasksPage extends StatefulWidget {
 }
 
 class _ExpertTasksPageState extends State<ExpertTasksPage> {
-  static const api = String.fromEnvironment('API_URL');
+  static const api = EnvConfig.apiBaseUrl;
 
   List assignedRestaurants = [];
   List completedTasks = [];
