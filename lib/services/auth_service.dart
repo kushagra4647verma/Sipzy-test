@@ -1,141 +1,173 @@
 // lib/services/auth_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'api_service.dart';
+import '../config/env_config.dart';
 
 class AuthService {
-  final SupabaseClient _supabase = Supabase.instance.client;
+  // Your backend's auth/OTP endpoints
+  static const String authBaseUrl = '${EnvConfig.apiBaseUrl}/auth';
 
-  // Send OTP
+  /// Send OTP via backend (which uses Twilio)
   Future<Map<String, dynamic>> sendOtp(String phone) async {
     try {
-      // Using Supabase Auth for OTP
-      final response = await _supabase.auth.signInWithOtp(
-        phone: '+91$phone', // Assuming Indian numbers
-        shouldCreateUser: true,
-      );
+      final response = await http
+          .post(
+            Uri.parse('$authBaseUrl/send-otp'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'phone': phone,
+              'country_code': '+91',
+            }),
+          )
+          .timeout(EnvConfig.requestTimeout);
 
-      return {
-        'success': true,
-        'message': 'OTP sent successfully',
-        // For development, you might want to show OTP
-        // In production, this should NOT be returned
-      };
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'message': data['message'] ?? 'OTP sent successfully',
+        };
+      } else {
+        final data = jsonDecode(response.body);
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to send OTP',
+        };
+      }
     } catch (e) {
+      print('❌ Send OTP Error: $e');
       return {
         'success': false,
-        'message': e.toString(),
+        'message': 'Network error: ${e.toString()}',
       };
     }
   }
 
-  // Verify OTP
+  /// Verify OTP via backend
   Future<Map<String, dynamic>> verifyOtp(String phone, String otp) async {
     try {
-      final response = await _supabase.auth.verifyOTP(
-        phone: '+91$phone',
-        token: otp,
-        type: OtpType.sms,
-      );
+      final response = await http
+          .post(
+            Uri.parse('$authBaseUrl/verify-otp'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'phone': phone,
+              'country_code': '+91',
+              'otp': otp,
+            }),
+          )
+          .timeout(EnvConfig.requestTimeout);
 
-      if (response.user != null) {
-        // Check if user profile exists
-        final profile = await _getUserProfile(response.user!.id);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        // Backend should return:
+        // {
+        //   "success": true,
+        //   "is_new": false,
+        //   "user": {...},
+        //   "token": "jwt_token"
+        // }
 
         return {
           'success': true,
-          'is_new': profile == null,
-          'user': profile ?? {'id': response.user!.id, 'phone': phone},
-          'session': response.session,
+          'is_new': data['is_new'] ?? false,
+          'user': data['user'],
+          'token': data['token'],
+        };
+      } else if (response.statusCode == 404) {
+        // User not found - needs signup
+        return {
+          'success': true,
+          'is_new': true,
+          'phone': phone,
+        };
+      } else {
+        final data = jsonDecode(response.body);
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Invalid OTP',
         };
       }
-
-      return {
-        'success': false,
-        'message': 'Invalid OTP',
-      };
     } catch (e) {
+      print('❌ Verify OTP Error: $e');
       return {
         'success': false,
-        'message': e.toString(),
+        'message': 'Network error: ${e.toString()}',
       };
     }
   }
 
-  // Sign up new user
+  /// Sign up new user
   Future<Map<String, dynamic>> signUp({
     required String name,
     required int age,
     required String phone,
   }) async {
     try {
-      final userId = _supabase.auth.currentUser?.id;
-
-      if (userId == null) {
-        return {
-          'success': false,
-          'message': 'User not authenticated',
-        };
-      }
-
-      // Create user profile in database
-      final response = await http.post(
-        Uri.parse('${ApiService.userService}/profile'),
-        headers: ApiService.getUserHeaders(userId),
-        body: jsonEncode({
-          'name': name,
-          'age': age,
-          'phone': phone,
-        }),
-      );
+      final response = await http
+          .post(
+            Uri.parse('$authBaseUrl/signup'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'name': name,
+              'age': age,
+              'phone': phone,
+              'country_code': '+91',
+            }),
+          )
+          .timeout(EnvConfig.requestTimeout);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
         return {
           'success': true,
-          'user': data['data'],
+          'user': data['user'],
+          'token': data['token'],
+        };
+      } else {
+        final data = jsonDecode(response.body);
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to create account',
         };
       }
-
-      return {
-        'success': false,
-        'message': 'Failed to create profile',
-      };
     } catch (e) {
+      print('❌ Signup Error: $e');
       return {
         'success': false,
-        'message': e.toString(),
+        'message': 'Network error: ${e.toString()}',
       };
     }
   }
 
-  // Get user profile
-  Future<Map<String, dynamic>?> _getUserProfile(String userId) async {
+  /// Get current user profile (if you need to refresh user data)
+  Future<Map<String, dynamic>?> getUserProfile(String token) async {
     try {
       final response = await http.get(
-        Uri.parse('${ApiService.userService}/me'),
-        headers: ApiService.getUserHeaders(userId),
-      );
+        Uri.parse('$authBaseUrl/me'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(EnvConfig.requestTimeout);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data['data'];
+        return data['user'];
       }
-
       return null;
     } catch (e) {
+      print('❌ Get Profile Error: $e');
       return null;
     }
   }
 
-  // Get current session
-  Future<Session?> getCurrentSession() async {
-    return _supabase.auth.currentSession;
-  }
-
-  // Sign out
+  /// Sign out (clear local session - add backend logout if needed)
   Future<void> signOut() async {
-    await _supabase.auth.signOut();
+    // If your backend has a logout endpoint:
+    // await http.post(Uri.parse('$authBaseUrl/logout'));
+
+    // Clear local session (handled by AuthState)
   }
 }

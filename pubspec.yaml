@@ -20,7 +20,7 @@ dependencies:
   # Utilities
   url_launcher: ^6.2.0
   image_picker: ^1.0.7
-
+  shared_preferences: ^2.2.2
   # UI
   cupertino_icons: ^1.0.2
 

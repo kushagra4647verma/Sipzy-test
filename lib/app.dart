@@ -97,9 +97,10 @@ class _SipZyAppState extends State<SipZyApp> {
         path: '/auth',
         name: 'auth',
         builder: (context, state) => AuthPage(
-          onLogin: (user) {
+          onLogin: (data) {
             setState(() {
-              auth.user = user;
+              auth.user = data['user'];
+              auth.userToken = data['token'];
             });
           },
         ),
@@ -150,16 +151,17 @@ class _SipZyAppState extends State<SipZyApp> {
 
       /// ---------------- Expert Routes ----------------
       GoRoute(
-        path: '/expert/auth',
-        name: 'expert-auth',
-        builder: (context, state) => AuthPage(
-          onLogin: (expert) {
-            setState(() {
-              auth.expert = expert;
-            });
-          },
-        ),
-      ),
+  path: '/expert/auth',
+  name: 'expert-auth',
+  builder: (context, state) => AuthPage(
+    onLogin: (data) {
+      setState(() {
+        auth.expert = data['user'];
+        auth.expertToken = data['token'];
+      });
+    },
+  ),
+),,
       GoRoute(
         path: '/expert',
         name: 'expert',
@@ -211,7 +213,16 @@ class _SipZyAppState extends State<SipZyApp> {
       ),
     ),
   );
+  @override
+void initState() {
+  super.initState();
+  _loadSession();
+}
 
+Future<void> _loadSession() async {
+  await auth.loadSession();
+  setState(() {});
+}
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
