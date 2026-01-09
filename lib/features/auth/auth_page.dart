@@ -45,7 +45,9 @@ class _AuthPageState extends State<AuthPage> {
     setState(() => loading = true);
 
     try {
+      print('📱 Sending OTP to: +91$phone');
       final result = await _authService.sendOtp(phone);
+      print('✅ Send OTP Response: $result');
 
       if (result['success']) {
         setState(() => step = AuthStep.otp);
@@ -54,6 +56,7 @@ class _AuthPageState extends State<AuthPage> {
         _toast(result['message'] ?? 'Failed to send OTP', error: true);
       }
     } catch (e) {
+      print('❌ Send OTP Exception: $e');
       _toast('Failed to send OTP: ${e.toString()}', error: true);
     } finally {
       setState(() => loading = false);
@@ -69,19 +72,26 @@ class _AuthPageState extends State<AuthPage> {
     setState(() => loading = true);
 
     try {
+      print('🔐 Verifying OTP: $otp for phone: +91$phone');
       final result = await _authService.verifyOtp(phone, otp);
+      print('✅ Verify OTP Response: $result');
 
       if (result['success']) {
         if (result['is_new'] == true) {
           setState(() => step = AuthStep.signup);
         } else {
-          widget.onLogin(result['user']);
+          // Pass both user and token
+          widget.onLogin({
+            'user': result['user'],
+            'token': result['token'],
+          });
           _toast('Welcome back!');
         }
       } else {
         _toast(result['message'] ?? 'Invalid OTP', error: true);
       }
     } catch (e) {
+      print('❌ Verify OTP Exception: $e');
       _toast('Verification failed: ${e.toString()}', error: true);
     } finally {
       setState(() => loading = false);
@@ -108,19 +118,26 @@ class _AuthPageState extends State<AuthPage> {
     setState(() => loading = true);
 
     try {
+      print('👤 Signing up: $name, age: $ageInt, phone: +91$phone');
       final result = await _authService.signUp(
         name: name,
         age: ageInt,
         phone: phone,
       );
+      print('✅ Signup Response: $result');
 
       if (result['success']) {
-        widget.onLogin(result['user']);
+        // Pass both user and token
+        widget.onLogin({
+          'user': result['user'],
+          'token': result['token'],
+        });
         _toast('Welcome to SipZy!');
       } else {
         _toast(result['message'] ?? 'Failed to create account', error: true);
       }
     } catch (e) {
+      print('❌ Signup Exception: $e');
       _toast('Signup failed: ${e.toString()}', error: true);
     } finally {
       setState(() => loading = false);

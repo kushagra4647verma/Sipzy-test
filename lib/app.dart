@@ -33,6 +33,19 @@ class _SipZyAppState extends State<SipZyApp> {
   final auth = AuthState();
   bool _splashComplete = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _loadSession();
+  }
+
+  Future<void> _loadSession() async {
+    await auth.loadSession();
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
   late final GoRouter _router = GoRouter(
     initialLocation: '/splash',
     refreshListenable: auth,
@@ -143,7 +156,7 @@ class _SipZyAppState extends State<SipZyApp> {
           user: auth.user!,
           onLogout: () {
             setState(() {
-              auth.user = null;
+              auth.clearUser();
             });
           },
         ),
@@ -151,17 +164,17 @@ class _SipZyAppState extends State<SipZyApp> {
 
       /// ---------------- Expert Routes ----------------
       GoRoute(
-  path: '/expert/auth',
-  name: 'expert-auth',
-  builder: (context, state) => AuthPage(
-    onLogin: (data) {
-      setState(() {
-        auth.expert = data['user'];
-        auth.expertToken = data['token'];
-      });
-    },
-  ),
-),,
+        path: '/expert/auth',
+        name: 'expert-auth',
+        builder: (context, state) => AuthPage(
+          onLogin: (data) {
+            setState(() {
+              auth.expert = data['user'];
+              auth.expertToken = data['token'];
+            });
+          },
+        ),
+      ),
       GoRoute(
         path: '/expert',
         name: 'expert',
@@ -179,13 +192,12 @@ class _SipZyAppState extends State<SipZyApp> {
           expert: auth.expert!,
           onLogout: () {
             setState(() {
-              auth.expert = null;
+              auth.clearExpert();
             });
           },
         ),
       ),
     ],
-    // Add error handling
     errorBuilder: (context, state) => Scaffold(
       backgroundColor: const Color(0xFF0A0A0A),
       body: Center(
@@ -213,16 +225,7 @@ class _SipZyAppState extends State<SipZyApp> {
       ),
     ),
   );
-  @override
-void initState() {
-  super.initState();
-  _loadSession();
-}
 
-Future<void> _loadSession() async {
-  await auth.loadSession();
-  setState(() {});
-}
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
