@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import '../../core/theme/colors.dart';
 
 class SplashScreen extends StatefulWidget {
-  const SplashScreen({super.key});
+  final VoidCallback? onComplete;
+
+  const SplashScreen({super.key, this.onComplete});
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -26,6 +28,13 @@ class _SplashScreenState extends State<SplashScreen>
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
+
+    // Navigate after 2 seconds
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted && widget.onComplete != null) {
+        widget.onComplete!();
+      }
+    });
   }
 
   @override

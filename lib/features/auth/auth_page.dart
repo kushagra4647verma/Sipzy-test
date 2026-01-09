@@ -1,9 +1,8 @@
-import 'dart:convert';
+// lib/features/auth/auth_page.dart
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-
 import '../../core/theme/colors.dart';
 import '../../core/theme/radius.dart';
+import '../../services/auth_service.dart';
 
 enum AuthStep { phone, otp, signup }
 
@@ -17,13 +16,12 @@ class AuthPage extends StatefulWidget {
 }
 
 class _AuthPageState extends State<AuthPage> {
-  static const api = String.fromEnvironment('API_URL');
+  final _authService = AuthService();
 
   AuthStep step = AuthStep.phone;
 
   String phone = '';
   String otp = '';
-  String displayOtp = '';
   String name = '';
   String age = '';
   bool agreedToTerms = false;
@@ -47,21 +45,16 @@ class _AuthPageState extends State<AuthPage> {
     setState(() => loading = true);
 
     try {
-      final res = await http.post(
-        Uri.parse('$api/auth/send-otp'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'phone': phone}),
-      );
+      final result = await _authService.sendOtp(phone);
 
-      final data = jsonDecode(res.body);
-      setState(() {
-        displayOtp = data['otp'].toString();
-        step = AuthStep.otp;
-      });
-
-      _toast('OTP sent! Your OTP is: ${data['otp']}');
-    } catch (_) {
-      _toast('Failed to send OTP', error: true);
+      if (result['success']) {
+        setState(() => step = AuthStep.otp);
+        _toast('OTP sent to your phone!');
+      } else {
+        _toast(result['message'] ?? 'Failed to send OTP', error: true);
+      }
+    } catch (e) {
+      _toast('Failed to send OTP: ${e.toString()}', error: true);
     } finally {
       setState(() => loading = false);
     }
@@ -76,22 +69,20 @@ class _AuthPageState extends State<AuthPage> {
     setState(() => loading = true);
 
     try {
-      final res = await http.post(
-        Uri.parse('$api/auth/verify-otp'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'phone': phone, 'otp': otp}),
-      );
+      final result = await _authService.verifyOtp(phone, otp);
 
-      final data = jsonDecode(res.body);
-
-      if (data['is_new'] == true) {
-        setState(() => step = AuthStep.signup);
+      if (result['success']) {
+        if (result['is_new'] == true) {
+          setState(() => step = AuthStep.signup);
+        } else {
+          widget.onLogin(result['user']);
+          _toast('Welcome back!');
+        }
       } else {
-        widget.onLogin(data['user']);
-        _toast('Welcome back!');
+        _toast(result['message'] ?? 'Invalid OTP', error: true);
       }
-    } catch (_) {
-      _toast('Invalid OTP. Please try again.', error: true);
+    } catch (e) {
+      _toast('Verification failed: ${e.toString()}', error: true);
     } finally {
       setState(() => loading = false);
     }
@@ -103,7 +94,8 @@ class _AuthPageState extends State<AuthPage> {
       return;
     }
 
-    if (int.tryParse(age)! < 23) {
+    final ageInt = int.tryParse(age);
+    if (ageInt == null || ageInt < 23) {
       _toast('You must be 23 years or older to use SipZy', error: true);
       return;
     }
@@ -116,17 +108,20 @@ class _AuthPageState extends State<AuthPage> {
     setState(() => loading = true);
 
     try {
-      final res = await http.post(
-        Uri.parse('$api/auth/signup'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'name': name, 'age': int.parse(age), 'phone': phone}),
+      final result = await _authService.signUp(
+        name: name,
+        age: ageInt,
+        phone: phone,
       );
 
-      final data = jsonDecode(res.body);
-      widget.onLogin(data['user']);
-      _toast('Welcome to SipZy!');
+      if (result['success']) {
+        widget.onLogin(result['user']);
+        _toast('Welcome to SipZy!');
+      } else {
+        _toast(result['message'] ?? 'Failed to create account', error: true);
+      }
     } catch (e) {
-      _toast('Failed to create account', error: true);
+      _toast('Signup failed: ${e.toString()}', error: true);
     } finally {
       setState(() => loading = false);
     }
@@ -169,12 +164,11 @@ class _AuthPageState extends State<AuthPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Welcome!',
+          'Welcome to SipZy!',
           style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
         const Text('Enter your phone number to get started'),
-
         const SizedBox(height: 24),
         TextField(
           keyboardType: TextInputType.phone,
@@ -182,14 +176,17 @@ class _AuthPageState extends State<AuthPage> {
           onChanged: (v) => phone = v.replaceAll(RegExp(r'\D'), ''),
           decoration: const InputDecoration(
             labelText: 'Phone Number',
+            prefixText: '+91 ',
             counterText: '',
           ),
         ),
-
         const SizedBox(height: 24),
-        ElevatedButton(
-          onPressed: loading ? null : sendOtp,
-          child: Text(loading ? 'Sending…' : 'Send OTP'),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: loading ? null : sendOtp,
+            child: Text(loading ? 'Sending…' : 'Send OTP'),
+          ),
         ),
       ],
     );
@@ -204,35 +201,30 @@ class _AuthPageState extends State<AuthPage> {
           style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
-        Text('Enter the 6-digit code sent to $phone'),
-
-        if (displayOtp.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Text(
-              'Your OTP: $displayOtp',
-              style: const TextStyle(color: Colors.amber, fontSize: 18),
-            ),
-          ),
-
+        Text('Enter the 6-digit code sent to +91 $phone'),
+        const SizedBox(height: 24),
         TextField(
           keyboardType: TextInputType.number,
           maxLength: 6,
           onChanged: (v) => otp = v,
-          decoration: const InputDecoration(labelText: 'OTP'),
+          decoration: const InputDecoration(
+            labelText: 'OTP',
+            counterText: '',
+          ),
         ),
-
         const SizedBox(height: 16),
-        ElevatedButton(
-          onPressed: loading ? null : verifyOtp,
-          child: Text(loading ? 'Verifying…' : 'Verify OTP'),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: loading ? null : verifyOtp,
+            child: Text(loading ? 'Verifying…' : 'Verify OTP'),
+          ),
         ),
         TextButton(
           onPressed: () {
             setState(() {
               step = AuthStep.phone;
               otp = '';
-              displayOtp = '';
             });
           },
           child: const Text('Change Phone Number'),
@@ -250,20 +242,17 @@ class _AuthPageState extends State<AuthPage> {
           style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 16),
-
         TextField(
           decoration: const InputDecoration(labelText: 'Full Name'),
           onChanged: (v) => name = v,
         ),
         const SizedBox(height: 12),
-
         TextField(
           decoration: const InputDecoration(labelText: 'Age (23+)'),
           keyboardType: TextInputType.number,
           onChanged: (v) => age = v,
         ),
         const SizedBox(height: 12),
-
         CheckboxListTile(
           value: agreedToTerms,
           onChanged: (v) => setState(() => agreedToTerms = v ?? false),
@@ -272,11 +261,13 @@ class _AuthPageState extends State<AuthPage> {
           ),
           controlAffinity: ListTileControlAffinity.leading,
         ),
-
         const SizedBox(height: 16),
-        ElevatedButton(
-          onPressed: loading ? null : signup,
-          child: Text(loading ? 'Creating Account…' : 'Get Started'),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: loading ? null : signup,
+            child: Text(loading ? 'Creating Account…' : 'Get Started'),
+          ),
         ),
       ],
     );

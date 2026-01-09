@@ -1,9 +1,12 @@
+// lib/features/home/home_page.dart
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:go_router/go_router.dart';
 
 import '../../shared/navigation/bottom_nav.dart';
 import '../../core/theme/colors.dart';
+import '../../services/api_service.dart';
 
 class HomePage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -14,47 +17,11 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  static const api = String.fromEnvironment('API_URL');
-
-  // data
   List restaurants = [];
-  List featuredRestaurants = [];
-  List trendingRestaurants = [];
   List<int> bookmarkedIds = [];
 
-  // ui state
   bool loading = true;
-  bool showFilters = false;
   String searchQuery = '';
-  String sortBy = 'rating';
-
-  // filters
-  List<String> selectedCuisines = [];
-  List<String> selectedBaseDrinks = [];
-  List<String> selectedTypes = [];
-  double rating = 0;
-  double distance = 10;
-  RangeValues cost = const RangeValues(0, 5000);
-
-  // share
-  Map<String, dynamic>? shareItem;
-
-  final cuisines = [
-    'Indian',
-    'Continental',
-    'Asian',
-    'Mediterranean',
-    'Italian',
-    'Chinese',
-  ];
-  final baseDrinks = ['Whisky', 'Rum', 'Vodka', 'Gin', 'Beer', 'Wine'];
-  final restaurantTypes = [
-    'Fine Dining',
-    'Casual',
-    'Romantic',
-    'Gastropub',
-    'Brewery',
-  ];
 
   @override
   void initState() {
@@ -69,70 +36,73 @@ class _HomePageState extends State<HomePage> {
   Future<void> fetchRestaurants() async {
     setState(() => loading = true);
 
-    final query = <String, String>{
-      if (searchQuery.isNotEmpty) 'search': searchQuery,
-      if (selectedCuisines.isNotEmpty) 'cuisine': selectedCuisines.first,
-      if (rating > 0) 'min_rating': rating.toString(),
-      if (distance < 10) 'max_distance': distance.toString(),
-      if (selectedTypes.isNotEmpty) 'restaurant_type': selectedTypes.first,
-      if (cost.start > 0) 'min_cost': cost.start.toInt().toString(),
-      if (cost.end < 5000) 'max_cost': cost.end.toInt().toString(),
-      'sort_by': sortBy,
-    };
+    try {
+      final userId = widget.user['id'] ?? widget.user['userId'];
+      final uri = searchQuery.isNotEmpty
+          ? Uri.parse('${ApiService.restaurantService}?search=$searchQuery')
+          : Uri.parse(ApiService.restaurantService);
 
-    final uri = Uri.parse('$api/restaurants').replace(queryParameters: query);
-    final res = await http.get(uri);
+      final response = await http.get(
+        uri,
+        headers: ApiService.getUserHeaders(userId.toString()),
+      );
 
-    if (res.statusCode == 200) {
-      restaurants = jsonDecode(res.body);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          restaurants =
+              data['success'] == true ? (data['data'] as List) : (data as List);
+        });
+      }
+    } catch (e) {
+      _toast('Failed to load restaurants: ${e.toString()}');
+    } finally {
+      setState(() => loading = false);
     }
-
-    if (searchQuery.isEmpty && !_hasActiveFilters) {
-      featuredRestaurants = await _fetchList('$api/restaurants/featured');
-      trendingRestaurants = await _fetchList('$api/restaurants/trending');
-    }
-
-    setState(() => loading = false);
-  }
-
-  Future<List> _fetchList(String url) async {
-    final res = await http.get(Uri.parse(url));
-    if (res.statusCode == 200) return jsonDecode(res.body);
-    return [];
   }
 
   Future<void> fetchBookmarks() async {
-    final res = await http.get(
-      Uri.parse('$api/bookmarks/${widget.user['id']}'),
-    );
-    if (res.statusCode == 200) {
-      final decoded = jsonDecode(res.body);
-      if (decoded is List) {
-        bookmarkedIds = decoded.map((e) => (e['id'] as num).toInt()).toList();
+    try {
+      final userId = widget.user['id'] ?? widget.user['userId'];
+      final response = await http.get(
+        Uri.parse('${ApiService.userService}/me/bookmarks'),
+        headers: ApiService.getUserHeaders(userId.toString()),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final bookmarks =
+            data['success'] == true ? (data['data'] as List) : (data as List);
+
+        setState(() {
+          bookmarkedIds =
+              bookmarks.map((e) => (e['id'] as num).toInt()).toList();
+        });
       }
+    } catch (e) {
+      print('Failed to fetch bookmarks: $e');
     }
   }
 
-  bool get _hasActiveFilters =>
-      selectedCuisines.isNotEmpty ||
-      selectedBaseDrinks.isNotEmpty ||
-      selectedTypes.isNotEmpty ||
-      rating > 0 ||
-      distance < 10 ||
-      cost.start > 0 ||
-      cost.end < 5000;
+  Future<void> toggleBookmark(String restaurantId) async {
+    try {
+      final userId = widget.user['id'] ?? widget.user['userId'];
+      final response = await http.post(
+        Uri.parse('${ApiService.userService}/bookmarks/$restaurantId'),
+        headers: ApiService.getUserHeaders(userId.toString()),
+      );
 
-  void clearFilters() {
-    setState(() {
-      selectedCuisines.clear();
-      selectedBaseDrinks.clear();
-      selectedTypes.clear();
-      rating = 0;
-      distance = 10;
-      cost = const RangeValues(0, 5000);
-      sortBy = 'rating';
-    });
-    fetchRestaurants();
+      if (response.statusCode == 200) {
+        await fetchBookmarks();
+        _toast('Bookmark updated');
+      }
+    } catch (e) {
+      _toast('Failed to update bookmark');
+    }
+  }
+
+  void _toast(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
@@ -148,7 +118,6 @@ class _HomePageState extends State<HomePage> {
                 setState(() => searchQuery = v);
                 fetchRestaurants();
               },
-              onFilterTap: () => setState(() => showFilters = true),
             ),
             Expanded(child: _buildContent()),
           ],
@@ -164,202 +133,74 @@ class _HomePageState extends State<HomePage> {
     }
 
     if (restaurants.isEmpty) {
-      return _EmptyState(onClear: clearFilters, hasFilters: _hasActiveFilters);
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.restaurant, size: 64, color: Colors.white24),
+            const SizedBox(height: 16),
+            const Text(
+              'No restaurants found',
+              style: TextStyle(color: Colors.white),
+            ),
+            if (searchQuery.isNotEmpty)
+              TextButton(
+                onPressed: () {
+                  setState(() => searchQuery = '');
+                  fetchRestaurants();
+                },
+                child: const Text('Clear Search'),
+              ),
+          ],
+        ),
+      );
     }
 
-    return ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        if (featuredRestaurants.isNotEmpty &&
-            !_hasActiveFilters &&
-            searchQuery.isEmpty)
-          _HorizontalSection('Featured Spots', featuredRestaurants),
-        if (trendingRestaurants.isNotEmpty &&
-            !_hasActiveFilters &&
-            searchQuery.isEmpty)
-          _HorizontalSection('Trending Restaurants', trendingRestaurants),
-        _GridSection(
-          title: searchQuery.isNotEmpty || _hasActiveFilters
-              ? 'Results (${restaurants.length})'
-              : 'Nearby Restaurants',
-          restaurants: restaurants,
-          bookmarkedIds: bookmarkedIds,
-          onShare: (item) => setState(() => shareItem = item),
+    return RefreshIndicator(
+      onRefresh: _loadAll,
+      child: GridView.builder(
+        padding: const EdgeInsets.all(16),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          childAspectRatio: 0.75,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
         ),
-      ],
-    );
-  }
-}
+        itemCount: restaurants.length,
+        itemBuilder: (context, index) {
+          final restaurant = restaurants[index];
+          final isBookmarked = bookmarkedIds.contains(restaurant['id']);
 
-class _Header extends StatelessWidget {
-  final String searchQuery;
-  final ValueChanged<String> onSearch;
-  final VoidCallback onFilterTap;
-
-  const _Header({
-    required this.searchQuery,
-    required this.onSearch,
-    required this.onFilterTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          TextField(
-            onChanged: onSearch,
-            decoration: InputDecoration(
-              hintText: 'Search restaurants...',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: IconButton(
-                icon: const Icon(Icons.filter_list),
-                onPressed: onFilterTap,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  final VoidCallback onClear;
-  final bool hasFilters;
-
-  const _EmptyState({required this.onClear, required this.hasFilters});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.restaurant, size: 64, color: Colors.white24),
-          const SizedBox(height: 16),
-          const Text('No restaurants found'),
-          if (hasFilters)
-            TextButton(onPressed: onClear, child: const Text('Clear Filters')),
-        ],
-      ),
-    );
-  }
-}
-
-class _HorizontalSection extends StatelessWidget {
-  final String title;
-  final List restaurants;
-
-  const _HorizontalSection(this.title, this.restaurants);
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text(
-            title,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-        ),
-        SizedBox(
-          height: 200,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: restaurants.length,
-            itemBuilder: (context, index) {
-              final restaurant = restaurants[index];
-              return Container(
-                width: 160,
-                margin: const EdgeInsets.only(right: 12),
-                child: Card(
-                  child: Column(
-                    children: [
-                      Image.network(
-                        restaurant['image'],
-                        height: 100,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(8),
-                        child: Text(
-                          restaurant['name'],
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _GridSection extends StatelessWidget {
-  final String title;
-  final List restaurants;
-  final List<int> bookmarkedIds;
-  final void Function(Map<String, dynamic>) onShare;
-
-  const _GridSection({
-    required this.title,
-    required this.restaurants,
-    required this.bookmarkedIds,
-    required this.onShare,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Text(
-            title,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-        ),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(16),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            childAspectRatio: 0.75,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-          ),
-          itemCount: restaurants.length,
-          itemBuilder: (context, index) {
-            final restaurant = Map<String, dynamic>.from(
-              restaurants[index] as Map,
-            );
-
-            final isBookmarked = bookmarkedIds.contains(restaurant['id']);
-
-            return Card(
+          return GestureDetector(
+            onTap: () => context.push('/restaurant/${restaurant['id']}'),
+            child: Card(
+              color: AppColors.card,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Stack(
                     children: [
-                      Image.network(
-                        restaurant['image'],
-                        height: 120,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
+                      ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(12),
+                        ),
+                        child: Image.network(
+                          restaurant['image'] ?? '',
+                          height: 120,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              height: 120,
+                              color: AppColors.muted,
+                              child: const Icon(
+                                Icons.restaurant,
+                                size: 40,
+                                color: Colors.white38,
+                              ),
+                            );
+                          },
+                        ),
                       ),
                       Positioned(
                         top: 8,
@@ -369,36 +210,95 @@ class _GridSection extends StatelessWidget {
                             isBookmarked
                                 ? Icons.bookmark
                                 : Icons.bookmark_border,
+                            color: AppColors.primary,
                           ),
-                          onPressed: () {},
+                          onPressed: () => toggleBookmark(
+                            restaurant['id'].toString(),
+                          ),
                         ),
                       ),
                     ],
                   ),
                   Padding(
-                    padding: const EdgeInsets.all(8),
+                    padding: const EdgeInsets.all(12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          restaurant['name'],
+                          restaurant['name'] ?? 'Restaurant',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         ),
+                        const SizedBox(height: 4),
                         Text(
                           restaurant['area'] ?? '',
-                          style: const TextStyle(fontSize: 12),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.white70,
+                          ),
                         ),
                       ],
                     ),
                   ),
                 ],
               ),
-            );
-          },
-        ),
-      ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _Header extends StatelessWidget {
+  final String searchQuery;
+  final ValueChanged<String> onSearch;
+
+  const _Header({
+    required this.searchQuery,
+    required this.onSearch,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: Colors.white12)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.local_bar, color: AppColors.primary, size: 28),
+              SizedBox(width: 8),
+              Text(
+                'SipZy',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            onChanged: onSearch,
+            decoration: const InputDecoration(
+              hintText: 'Search restaurants...',
+              prefixIcon: Icon(Icons.search),
+              filled: true,
+              fillColor: AppColors.muted,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

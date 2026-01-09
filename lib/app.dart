@@ -31,19 +31,17 @@ class SipZyApp extends StatefulWidget {
 
 class _SipZyAppState extends State<SipZyApp> {
   final auth = AuthState();
-  bool showSplash = true;
   Timer? _splashTimer;
 
   @override
   void initState() {
     super.initState();
 
-    // Set splash to false after 2 seconds
+    // Auto-navigate after splash
     _splashTimer = Timer(const Duration(seconds: 2), () {
       if (mounted) {
-        setState(() {
-          showSplash = false;
-        });
+        // This will trigger a navigation after splash
+        setState(() {});
       }
     });
   }
@@ -55,17 +53,12 @@ class _SipZyAppState extends State<SipZyApp> {
   }
 
   late final GoRouter _router = GoRouter(
-    initialLocation: '/',
+    initialLocation: '/splash',
     refreshListenable: auth,
     redirect: (context, state) {
       final location = state.matchedLocation;
 
-      // Always show splash first (no redirect during splash)
-      if (showSplash && location != '/splash') {
-        return '/splash';
-      }
-
-      // Don't redirect if still on splash
+      // If on splash page, let the splash screen handle its own navigation
       if (location == '/splash') {
         return null;
       }
@@ -105,7 +98,12 @@ class _SipZyAppState extends State<SipZyApp> {
       GoRoute(
         path: '/splash',
         name: 'splash',
-        builder: (context, state) => const SplashScreen(),
+        builder: (context, state) => SplashScreen(
+          onComplete: () {
+            // Navigate to auth after splash completes
+            context.go('/auth');
+          },
+        ),
       ),
 
       /// ---------------- Customer Routes ----------------

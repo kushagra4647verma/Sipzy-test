@@ -1,11 +1,13 @@
+// lib/features/restaurant/restaurant_detail.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme/colors.dart';
 import '../../core/theme/radius.dart';
-import 'package:go_router/go_router.dart';
+import '../../services/api_service.dart';
 
 class RestaurantDetail extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -22,8 +24,6 @@ class RestaurantDetail extends StatefulWidget {
 }
 
 class _RestaurantDetailState extends State<RestaurantDetail> {
-  static const api = String.fromEnvironment('API_URL');
-
   Map<String, dynamic>? restaurant;
   List beverages = [];
   List filteredBeverages = [];
@@ -33,130 +33,132 @@ class _RestaurantDetailState extends State<RestaurantDetail> {
   bool isBookmarked = false;
 
   String searchQuery = '';
-  String sortBy = 'recommended';
-  String menuTab = 'beverages';
-
-  bool showSort = false;
-  bool showShare = false;
-  bool showInvite = false;
-  bool showGroupMix = false;
-
-  Map<String, dynamic>? shareItem;
 
   @override
   void initState() {
     super.initState();
-    _resetState();
     fetchRestaurant();
     checkBookmark();
   }
 
-  void _resetState() {
-    alcoholicOnly = true;
-    searchQuery = '';
-    sortBy = 'recommended';
-    menuTab = 'beverages';
-  }
+  String get _userId => (widget.user['id'] ?? widget.user['userId']).toString();
 
   Future<void> fetchRestaurant() async {
     setState(() => loading = true);
 
     try {
-      final res = await http.get(
-        Uri.parse('$api/restaurants/${widget.restaurantId}'),
+      // Fetch restaurant details
+      final restaurantRes = await http.get(
+        Uri.parse('${ApiService.restaurantService}/${widget.restaurantId}'),
+        headers: ApiService.getUserHeaders(_userId),
       );
-      final data = jsonDecode(res.body);
 
-      setState(() {
-        restaurant = data;
-        beverages = data['beverages'] ?? [];
-      });
+      if (restaurantRes.statusCode == 200) {
+        final data = jsonDecode(restaurantRes.body);
+        setState(() {
+          restaurant = data['success'] == true ? data['data'] : data;
+        });
+      }
 
-      filterAndSort();
-    } catch (_) {
-      _toast('Failed to load restaurant');
+      // Fetch restaurant beverages
+      final beveragesRes = await http.get(
+        Uri.parse(
+          '${ApiService.restaurantService}/${widget.restaurantId}/beverages',
+        ),
+        headers: ApiService.getUserHeaders(_userId),
+      );
+
+      if (beveragesRes.statusCode == 200) {
+        final data = jsonDecode(beveragesRes.body);
+        setState(() {
+          beverages = data['success'] == true ? data['data'] : data;
+        });
+        filterAndSort();
+      }
+    } catch (e) {
+      _toast('Failed to load restaurant: ${e.toString()}');
     } finally {
       setState(() => loading = false);
     }
   }
 
   Future<void> checkBookmark() async {
-    final res = await http.get(
-      Uri.parse(
-        '$api/bookmarks/check/${widget.user['id']}/${widget.restaurantId}',
-      ),
-    );
-    final data = jsonDecode(res.body);
-    setState(() => isBookmarked = data['bookmarked']);
+    try {
+      final response = await http.get(
+        Uri.parse('${ApiService.userService}/me/bookmarks'),
+        headers: ApiService.getUserHeaders(_userId),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final bookmarks = data['success'] == true ? data['data'] : data;
+
+        setState(() {
+          isBookmarked = (bookmarks as List).any(
+            (b) => b['id'].toString() == widget.restaurantId,
+          );
+        });
+      }
+    } catch (e) {
+      print('Failed to check bookmark: $e');
+    }
   }
 
   Future<void> toggleBookmark() async {
-    final res = await http.post(
-      Uri.parse('$api/bookmarks'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'user_id': widget.user['id'],
-        'restaurant_id': widget.restaurantId,
-      }),
-    );
+    try {
+      final response = await http.post(
+        Uri.parse('${ApiService.userService}/bookmarks/${widget.restaurantId}'),
+        headers: ApiService.getUserHeaders(_userId),
+      );
 
-    final data = jsonDecode(res.body);
-    setState(() => isBookmarked = data['bookmarked']);
-
-    _toast(data['bookmarked'] ? 'Bookmarked!' : 'Bookmark removed');
+      if (response.statusCode == 200) {
+        setState(() => isBookmarked = !isBookmarked);
+        _toast(isBookmarked ? 'Bookmarked!' : 'Bookmark removed');
+      }
+    } catch (e) {
+      _toast('Failed to update bookmark');
+    }
   }
 
   void filterAndSort() {
     List list = beverages
-        .where((b) => b['alcoholic'] == alcoholicOnly)
+        .where((b) => (b['alcoholic'] ?? false) == alcoholicOnly)
         .toList();
 
     if (searchQuery.isNotEmpty) {
       list = list
-          .where(
-            (b) =>
-                b['name'].toLowerCase().contains(searchQuery.toLowerCase()) ||
-                b['type'].toLowerCase().contains(searchQuery.toLowerCase()),
-          )
+          .where((b) =>
+              (b['name'] ?? '')
+                  .toString()
+                  .toLowerCase()
+                  .contains(searchQuery.toLowerCase()) ||
+              (b['type'] ?? '')
+                  .toString()
+                  .toLowerCase()
+                  .contains(searchQuery.toLowerCase()))
           .toList();
-    }
-
-    if (sortBy == 'price_low') {
-      list.sort((a, b) => a['price'].compareTo(b['price']));
-    } else if (sortBy == 'price_high') {
-      list.sort((a, b) => b['price'].compareTo(a['price']));
-    } else {
-      list.sort(
-        (a, b) => (b['sipzy_rating'] ?? 0).compareTo(a['sipzy_rating'] ?? 0),
-      );
     }
 
     setState(() => filteredBeverages = list);
   }
 
-  void openMaps() async {
-    final lat = restaurant!['lat'];
-    final lon = restaurant!['lon'];
-    final url = Uri.parse(
-      'https://www.google.com/maps/search/?api=1&query=$lat,$lon',
-    );
-    await launchUrl(url);
-  }
-
   void callRestaurant() async {
-    final phone = restaurant!['phone'];
-    await launchUrl(Uri.parse('tel:$phone'));
+    final phone = restaurant?['phone'];
+    if (phone != null) {
+      await launchUrl(Uri.parse('tel:$phone'));
+    }
   }
 
-  void shareBeverage(Map bev) {
-    setState(() {
-      shareItem = {
-        'title': bev['name'],
-        'description':
-            '${bev['type']} • ₹${bev['price']} • ${restaurant!['name']}',
-      };
-      showShare = true;
-    });
+  void openMaps() async {
+    final lat = restaurant?['latitude'] ?? restaurant?['lat'];
+    final lon = restaurant?['longitude'] ?? restaurant?['lon'];
+
+    if (lat != null && lon != null) {
+      final url = Uri.parse(
+        'https://www.google.com/maps/search/?api=1&query=$lat,$lon',
+      );
+      await launchUrl(url);
+    }
   }
 
   void _toast(String msg) {
@@ -173,25 +175,36 @@ class _RestaurantDetailState extends State<RestaurantDetail> {
     }
 
     if (restaurant == null) {
-      return const SizedBox.shrink();
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('Restaurant not found'),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Go Back'),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: Stack(children: [_content(), if (showSort) _sortSheet()]),
-    );
-  }
-
-  // ---------------- UI ----------------
-
-  Widget _content() {
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 40),
-      children: [
-        _header(),
-        _toggleSearchSort(),
-        Padding(padding: const EdgeInsets.all(16), child: _menuSection()),
-      ],
+      body: ListView(
+        padding: const EdgeInsets.only(bottom: 40),
+        children: [
+          _header(),
+          _toggleSearchSort(),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: _menuSection(),
+          ),
+        ],
+      ),
     );
   }
 
@@ -199,10 +212,21 @@ class _RestaurantDetailState extends State<RestaurantDetail> {
     return Stack(
       children: [
         Image.network(
-          restaurant!['image'],
+          restaurant!['image'] ?? '',
           height: 320,
           width: double.infinity,
           fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return Container(
+              height: 320,
+              color: AppColors.muted,
+              child: const Icon(
+                Icons.restaurant,
+                size: 80,
+                color: Colors.white38,
+              ),
+            );
+          },
         ),
         Container(
           height: 320,
@@ -228,12 +252,11 @@ class _RestaurantDetailState extends State<RestaurantDetail> {
                     isBookmarked ? Icons.bookmark : Icons.bookmark_border,
                     toggleBookmark,
                   ),
-                  _circleBtn(
-                    Icons.group,
-                    () => setState(() => showInvite = true),
-                  ),
-                  _circleBtn(Icons.call, callRestaurant),
-                  _circleBtn(Icons.map, openMaps),
+                  if (restaurant!['phone'] != null)
+                    _circleBtn(Icons.call, callRestaurant),
+                  if (restaurant!['latitude'] != null ||
+                      restaurant!['lat'] != null)
+                    _circleBtn(Icons.map, openMaps),
                 ],
               ),
             ],
@@ -243,29 +266,22 @@ class _RestaurantDetailState extends State<RestaurantDetail> {
           bottom: 20,
           left: 16,
           right: 16,
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      restaurant!['name'],
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      restaurant!['cuisine'].join(' • '),
-                      style: const TextStyle(color: Colors.white70),
-                    ),
-                  ],
+              Text(
+                restaurant!['name'] ?? 'Restaurant',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-              _surpriseBtn(),
+              const SizedBox(height: 4),
+              Text(
+                restaurant!['area'] ?? '',
+                style: const TextStyle(color: Colors.white70),
+              ),
             ],
           ),
         ),
@@ -286,29 +302,19 @@ class _RestaurantDetailState extends State<RestaurantDetail> {
     );
   }
 
-  Widget _surpriseBtn() {
-    return InkWell(
-      onTap: () => setState(() => showGroupMix = true),
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(colors: [Colors.purple, Colors.pink]),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: const Icon(Icons.auto_awesome, color: Colors.white),
-      ),
-    );
-  }
-
   Widget _toggleSearchSort() {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: AppColors.card,
         border: Border(bottom: BorderSide(color: Colors.white12)),
       ),
       child: Row(
         children: [
+          const Text(
+            'Alcoholic Only',
+            style: TextStyle(color: Colors.white70),
+          ),
           Switch(
             value: alcoholicOnly,
             onChanged: (v) {
@@ -320,6 +326,7 @@ class _RestaurantDetailState extends State<RestaurantDetail> {
             child: TextField(
               decoration: const InputDecoration(
                 hintText: 'Search beverages...',
+                border: InputBorder.none,
               ),
               onChanged: (v) {
                 searchQuery = v;
@@ -327,25 +334,20 @@ class _RestaurantDetailState extends State<RestaurantDetail> {
               },
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.sort),
-            onPressed: () => setState(() => showSort = true),
-          ),
         ],
       ),
     );
   }
 
   Widget _menuSection() {
-    if (menuTab == 'food') {
-      return _foodMenu();
-    }
-
     if (filteredBeverages.isEmpty) {
       return const Center(
-        child: Text(
-          'No beverages found',
-          style: TextStyle(color: Colors.white60),
+        child: Padding(
+          padding: EdgeInsets.all(40),
+          child: Text(
+            'No beverages found',
+            style: TextStyle(color: Colors.white60),
+          ),
         ),
       );
     }
@@ -366,50 +368,62 @@ class _RestaurantDetailState extends State<RestaurantDetail> {
 
   Widget _beverageCard(Map bev) {
     return InkWell(
-      onTap: () => context.go('/beverage/${bev['id']}'),
+      onTap: () => context.push('/beverage/${bev['id']}'),
       child: Container(
         decoration: BoxDecoration(
           color: AppColors.card,
           borderRadius: BorderRadius.circular(AppRadius.lg),
         ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Stack(
-              children: [
-                ClipRRect(
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(16),
-                  ),
-                  child: Image.network(
-                    bev['image'],
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(16),
+              ),
+              child: Image.network(
+                bev['image'] ?? '',
+                height: 120,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
                     height: 120,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                Positioned(
-                  top: 6,
-                  right: 6,
-                  child: _circleBtn(Icons.share, () => shareBeverage(bev)),
-                ),
-              ],
+                    color: AppColors.muted,
+                    child: const Icon(
+                      Icons.local_drink,
+                      size: 40,
+                      color: Colors.white38,
+                    ),
+                  );
+                },
+              ),
             ),
             Padding(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    bev['name'],
-                    style: const TextStyle(color: Colors.white),
+                    bev['name'] ?? 'Beverage',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
+                  const SizedBox(height: 4),
                   Text(
-                    bev['type'],
-                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                    bev['type'] ?? '',
+                    style: const TextStyle(
+                      color: Colors.white54,
+                      fontSize: 12,
+                    ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
                   Text(
-                    '₹${bev['price']}',
+                    '₹${bev['price'] ?? 0}',
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -421,72 +435,6 @@ class _RestaurantDetailState extends State<RestaurantDetail> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _foodMenu() {
-    final photos = restaurant!['photos'] ?? [];
-
-    if (photos.isEmpty) {
-      return const Center(
-        child: Text(
-          'No menu photos available',
-          style: TextStyle(color: Colors.white60),
-        ),
-      );
-    }
-
-    return Column(
-      children: photos
-          .map<Widget>(
-            (p) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(AppRadius.lg),
-                child: Image.network(p),
-              ),
-            ),
-          )
-          .toList(),
-    );
-  }
-
-  Widget _sortSheet() {
-    return Positioned(
-      bottom: 0,
-      left: 0,
-      right: 0,
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: AppColors.background,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _sortOption('recommended', 'Recommended'),
-            _sortOption('price_low', 'Price: Low to High'),
-            _sortOption('price_high', 'Price: High to Low'),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _sortOption(String value, String label) {
-    return ListTile(
-      title: Text(label, style: const TextStyle(color: Colors.white)),
-      trailing: sortBy == value
-          ? const Icon(Icons.check, color: AppColors.primary)
-          : null,
-      onTap: () {
-        setState(() {
-          sortBy = value;
-          showSort = false;
-        });
-        filterAndSort();
-      },
     );
   }
 }
