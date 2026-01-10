@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/colors.dart';
 import '../../core/theme/radius.dart';
-import '../../services/auth_service.dart';
+import '../../services/auth_service.dart'; // Updated import
 
 enum AuthStep { phone, otp, signup }
 
@@ -27,6 +27,9 @@ class _AuthPageState extends State<AuthPage> {
   bool agreedToTerms = false;
   bool loading = false;
 
+  // NEW: Store dev OTP to display it
+  String? devOtp;
+
   void _toast(String msg, {bool error = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -50,8 +53,16 @@ class _AuthPageState extends State<AuthPage> {
       print('✅ Send OTP Response: $result');
 
       if (result['success']) {
-        setState(() => step = AuthStep.otp);
-        _toast('OTP sent to your phone!');
+        setState(() {
+          step = AuthStep.otp;
+          devOtp = result['dev_otp']; // Store dev OTP if available
+        });
+
+        if (devOtp != null) {
+          _toast('DEV MODE: OTP is $devOtp');
+        } else {
+          _toast('OTP sent! Check DigitalOcean logs');
+        }
       } else {
         _toast(result['message'] ?? 'Failed to send OTP', error: true);
       }
@@ -80,7 +91,6 @@ class _AuthPageState extends State<AuthPage> {
         if (result['is_new'] == true) {
           setState(() => step = AuthStep.signup);
         } else {
-          // Pass both user and token
           widget.onLogin({
             'user': result['user'],
             'token': result['token'],
@@ -127,7 +137,6 @@ class _AuthPageState extends State<AuthPage> {
       print('✅ Signup Response: $result');
 
       if (result['success']) {
-        // Pass both user and token
         widget.onLogin({
           'user': result['user'],
           'token': result['token'],
@@ -219,6 +228,52 @@ class _AuthPageState extends State<AuthPage> {
         ),
         const SizedBox(height: 8),
         Text('Enter the 6-digit code sent to +91 $phone'),
+
+        // NEW: Show dev OTP prominently
+        if (devOtp != null) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.primary),
+            ),
+            child: Column(
+              children: [
+                const Row(
+                  children: [
+                    Icon(Icons.bug_report, color: AppColors.primary, size: 20),
+                    SizedBox(width: 8),
+                    Text(
+                      'DEV MODE',
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Your OTP: $devOtp',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 4,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'From DigitalOcean Backend',
+                  style: TextStyle(color: Colors.white60, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+        ],
+
         const SizedBox(height: 24),
         TextField(
           keyboardType: TextInputType.number,
@@ -242,6 +297,7 @@ class _AuthPageState extends State<AuthPage> {
             setState(() {
               step = AuthStep.phone;
               otp = '';
+              devOtp = null;
             });
           },
           child: const Text('Change Phone Number'),
