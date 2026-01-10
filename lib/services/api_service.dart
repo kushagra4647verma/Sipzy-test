@@ -11,7 +11,8 @@ class ApiService {
   static const String socialService = '$baseUrl/friends';
 
   // Auth endpoints (assuming Supabase Auth)
-  static const String authUrl = 'YOUR_SUPABASE_URL/auth/v1';
+  static const String authUrl =
+      'https://odtqequzbunyxpyjcoex.supabase.co/auth/v1';
 
   // Headers helper
   static Map<String, String> getHeaders({String? token}) {

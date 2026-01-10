@@ -2,7 +2,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
+import 'package:shimmer/shimmer.dart';
 import '../../config/env_config.dart';
+import '../../core/theme/app_theme.dart';
+import '../../shared/navigation/bottom_nav.dart';
 
 class EventsPage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -18,6 +21,7 @@ class _EventsPageState extends State<EventsPage> {
 
   List events = [];
   bool loading = true;
+  bool hasError = false;
   String searchQuery = '';
 
   @override
@@ -27,13 +31,26 @@ class _EventsPageState extends State<EventsPage> {
   }
 
   Future<void> fetchEvents() async {
-    setState(() => loading = true);
+    setState(() {
+      loading = true;
+      hasError = false;
+    });
+
     try {
       final query = searchQuery.isNotEmpty ? '?search=$searchQuery' : '';
       final res = await http.get(Uri.parse('$api/events$query'));
-      setState(() => events = jsonDecode(res.body));
-    } catch (_) {
-      _toast('Failed to load events');
+
+      if (res.statusCode == 200) {
+        setState(() {
+          events = jsonDecode(res.body);
+          hasError = false;
+        });
+      } else {
+        throw Exception('Failed to load events');
+      }
+    } catch (e) {
+      setState(() => hasError = true);
+      _toast('Failed to load events', isError: true);
     } finally {
       setState(() => loading = false);
     }
@@ -43,12 +60,25 @@ class _EventsPageState extends State<EventsPage> {
     final uri = Uri.parse('tel:+918012345678');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
-      _toast('Booking for ${event['name']}...');
+      _toast('Booking ${event['name']}...');
+    } else {
+      _toast('Unable to make call', isError: true);
     }
   }
 
-  void _toast(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  void _toast(String msg, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: isError ? Colors.red.shade600 : AppTheme.card,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        ),
+        margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
   @override
@@ -62,89 +92,119 @@ class _EventsPageState extends State<EventsPage> {
         .toList();
 
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: Column(
-        children: [
-          _header(),
-          Expanded(
-            child: loading
-                ? _loadingSkeleton()
-                : SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (featured.isNotEmpty)
-                          _section(
-                            'Featured Events',
-                            featured,
-                            tag: 'Featured',
-                          ),
-                        if (trending.isNotEmpty)
-                          _section(
-                            'Trending Near You',
-                            trending,
-                            tag: 'Trending',
-                          ),
-                        if (more.isNotEmpty) _section('More Events', more),
-                        if (events.isEmpty) _emptyState(),
-                      ],
-                    ),
-                  ),
-          ),
-        ],
+      backgroundColor: AppTheme.background,
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildHeader(),
+            Expanded(
+              child: loading
+                  ? _buildLoadingSkeleton()
+                  : hasError
+                      ? _buildErrorState()
+                      : RefreshIndicator(
+                          onRefresh: fetchEvents,
+                          color: AppTheme.primary,
+                          backgroundColor: AppTheme.card,
+                          child: events.isEmpty
+                              ? _buildEmptyState()
+                              : SingleChildScrollView(
+                                  padding: const EdgeInsets.all(16),
+                                  physics:
+                                      const AlwaysScrollableScrollPhysics(),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      if (featured.isNotEmpty)
+                                        _buildSection(
+                                          'Featured Events',
+                                          featured,
+                                          tag: 'Featured',
+                                        ),
+                                      if (trending.isNotEmpty)
+                                        _buildSection(
+                                          'Trending Near You',
+                                          trending,
+                                          tag: 'Trending',
+                                        ),
+                                      if (more.isNotEmpty)
+                                        _buildSection('More Events', more),
+                                    ],
+                                  ),
+                                ),
+                        ),
+            ),
+          ],
+        ),
       ),
-      bottomNavigationBar: _bottomNav(),
+      bottomNavigationBar: const BottomNav(active: 'events'),
     );
   }
 
-  // ---------------- UI ----------------
+  // ---------------- HEADER ----------------
 
-  Widget _header() {
+  Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.black,
-        border: Border(bottom: BorderSide(color: Colors.white12)),
+        border: Border(bottom: BorderSide(color: AppTheme.border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            children: const [
-              Icon(Icons.calendar_month, color: Colors.purple, size: 28),
-              SizedBox(width: 8),
-              Text(
-                'EventS',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [AppTheme.secondary, AppTheme.secondaryLight],
+                  ),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                 ),
+                child: Icon(
+                  Icons.calendar_month_rounded,
+                  color: Colors.white,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Events',
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
+                  Text(
+                    'Discover exciting events near you',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: 4),
-          const Text(
-            'Discover exciting events near you',
-            style: TextStyle(color: Colors.white60),
-          ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           TextField(
             onChanged: (v) {
               searchQuery = v;
               fetchEvents();
             },
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: AppTheme.textPrimary),
             decoration: InputDecoration(
               hintText: 'Search events...',
-              hintStyle: const TextStyle(color: Colors.white38),
-              prefixIcon: const Icon(Icons.search, color: Colors.white38),
+              hintStyle: TextStyle(color: AppTheme.textTertiary),
+              prefixIcon: Icon(Icons.search, color: AppTheme.textSecondary),
               filled: true,
-              fillColor: Colors.white10,
+              fillColor: AppTheme.glassLight,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                 borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: AppTheme.spacing16,
+                vertical: AppTheme.spacing12,
               ),
             ),
           ),
@@ -153,48 +213,106 @@ class _EventsPageState extends State<EventsPage> {
     );
   }
 
-  Widget _section(String title, List list, {String? tag}) {
+  // ---------------- SECTIONS ----------------
+
+  Widget _buildSection(String title, List list, {String? tag}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 24),
-        Text(
-          title,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-          ),
+        Row(
+          children: [
+            Container(
+              width: 4,
+              height: 24,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: tag == 'Featured'
+                      ? [AppTheme.primary, AppTheme.primaryLight]
+                      : [AppTheme.secondary, AppTheme.secondaryLight],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+          ],
         ),
         const SizedBox(height: 12),
-        ...list.map((event) => _eventCard(event, tag: tag)),
+        ...list.map((event) => _buildEventCard(event, tag: tag)),
       ],
     );
   }
 
-  Widget _eventCard(Map event, {String? tag}) {
+  // ---------------- EVENT CARD ----------------
+
+  Widget _buildEventCard(Map event, {String? tag}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        color: Colors.white10,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        color: AppTheme.card,
+        border: Border.all(color: AppTheme.border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Image Header
           Stack(
             children: [
               ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(20),
+                borderRadius: BorderRadius.vertical(
+                  top: Radius.circular(AppTheme.radiusLg),
                 ),
                 child: Image.network(
                   event['image'],
-                  height: 190,
+                  height: 200,
                   width: double.infinity,
                   fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      height: 200,
+                      decoration: BoxDecoration(
+                        color: AppTheme.glassLight,
+                        borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(AppTheme.radiusLg),
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.event_rounded,
+                            size: 48,
+                            color: AppTheme.textTertiary,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Image unavailable',
+                            style: TextStyle(
+                              color: AppTheme.textTertiary,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
               ),
+              // Tag Badge
               if (tag != null)
                 Positioned(
                   top: 12,
@@ -202,24 +320,55 @@ class _EventsPageState extends State<EventsPage> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
-                      vertical: 4,
+                      vertical: 6,
                     ),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(20),
-                      color: tag == 'Featured' ? Colors.amber : Colors.purple,
-                    ),
-                    child: Text(
-                      tag,
-                      style: TextStyle(
-                        color: tag == 'Featured' ? Colors.black : Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
+                      gradient: LinearGradient(
+                        colors: tag == 'Featured'
+                            ? [AppTheme.primary, AppTheme.primaryLight]
+                            : [AppTheme.secondary, AppTheme.secondaryLight],
                       ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (tag == 'Featured'
+                                  ? AppTheme.primary
+                                  : AppTheme.secondary)
+                              .withOpacity(0.4),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          tag == 'Featured'
+                              ? Icons.star_rounded
+                              : Icons.trending_up_rounded,
+                          size: 14,
+                          color:
+                              tag == 'Featured' ? Colors.black : Colors.white,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          tag,
+                          style: TextStyle(
+                            color:
+                                tag == 'Featured' ? Colors.black : Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
             ],
           ),
+
+          // Content
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -227,58 +376,79 @@ class _EventsPageState extends State<EventsPage> {
               children: [
                 Text(
                   event['name'],
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 Text(
                   event['description'],
-                  style: const TextStyle(color: Colors.white70),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppTheme.textSecondary,
+                      ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
+
+                // Date & Location
                 Row(
                   children: [
-                    const Icon(
-                      Icons.calendar_today,
-                      size: 14,
-                      color: Colors.white54,
+                    Expanded(
+                      child: _buildInfoChip(
+                        icon: Icons.calendar_today_rounded,
+                        label: event['date'],
+                      ),
                     ),
-                    const SizedBox(width: 6),
-                    Text(
-                      event['date'],
-                      style: const TextStyle(color: Colors.white60),
-                    ),
-                    const SizedBox(width: 16),
-                    const Icon(
-                      Icons.location_on,
-                      size: 14,
-                      color: Colors.white54,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      event['location'],
-                      style: const TextStyle(color: Colors.white60),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildInfoChip(
+                        icon: Icons.location_on_rounded,
+                        label: event['location'],
+                      ),
                     ),
                   ],
                 ),
+
                 const SizedBox(height: 16),
-                ElevatedButton.icon(
-                  onPressed: () => bookNow(event),
-                  icon: const Icon(Icons.phone, size: 16),
-                  label: const Text('Book Now'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor:
-                        tag == 'Trending' ? Colors.purple : Colors.amber,
-                    foregroundColor:
-                        tag == 'Trending' ? Colors.white : Colors.black,
-                    minimumSize: const Size.fromHeight(44),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
+
+                // Book Button
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: tag == 'Featured'
+                      ? AppTheme.gradientButtonAmber(
+                          onPressed: () => bookNow(event),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Icon(Icons.phone_rounded, size: 18),
+                              SizedBox(width: 8),
+                              Text(
+                                'Book Now',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : AppTheme.gradientButtonPurple(
+                          onPressed: () => bookNow(event),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Icon(Icons.phone_rounded, size: 18),
+                              SizedBox(width: 8),
+                              Text(
+                                'Book Now',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                 ),
               ],
             ),
@@ -288,37 +458,113 @@ class _EventsPageState extends State<EventsPage> {
     );
   }
 
-  Widget _loadingSkeleton() {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: 3,
-      itemBuilder: (context, index) => Container(
-        margin: const EdgeInsets.only(bottom: 16),
-        height: 240,
-        decoration: BoxDecoration(
-          color: Colors.white10,
-          borderRadius: BorderRadius.circular(20),
-        ),
+  Widget _buildInfoChip({required IconData icon, required String label}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 8,
+      ),
+      decoration: BoxDecoration(
+        color: AppTheme.glassLight,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 14,
+            color: AppTheme.textTertiary,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodySmall,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _emptyState() {
+  // ---------------- LOADING SKELETON ----------------
+
+  Widget _buildLoadingSkeleton() {
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: 3,
+      itemBuilder: (context, index) {
+        return Shimmer.fromColors(
+          baseColor: AppTheme.card,
+          highlightColor: AppTheme.glassLight,
+          child: Container(
+            height: 320,
+            margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(
+              color: AppTheme.card,
+              borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+              border: Border.all(color: AppTheme.border),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ---------------- ERROR STATE ----------------
+
+  Widget _buildErrorState() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.only(top: 80),
+        padding: const EdgeInsets.all(32),
         child: Column(
-          children: const [
-            Icon(Icons.calendar_month, size: 64, color: Colors.white24),
-            SizedBox(height: 12),
-            Text(
-              'No events found',
-              style: TextStyle(color: Colors.white, fontSize: 18),
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    AppTheme.secondary.withOpacity(0.2),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+              child: Icon(
+                Icons.cloud_off_rounded,
+                size: 64,
+                color: AppTheme.textTertiary,
+              ),
             ),
-            SizedBox(height: 4),
+            const SizedBox(height: 24),
             Text(
-              'Try a different search term',
-              style: TextStyle(color: Colors.white60),
+              'Unable to load events',
+              style: Theme.of(context).textTheme.titleLarge,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Check your connection and try again',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppTheme.textSecondary,
+                  ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            AppTheme.gradientButtonPurple(
+              onPressed: fetchEvents,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.refresh_rounded, size: 20),
+                  SizedBox(width: 8),
+                  Text('Retry'),
+                ],
+              ),
             ),
           ],
         ),
@@ -326,18 +572,71 @@ class _EventsPageState extends State<EventsPage> {
     );
   }
 
-  Widget _bottomNav() {
-    return BottomNavigationBar(
-      currentIndex: 2,
-      backgroundColor: Colors.black,
-      selectedItemColor: Colors.amber,
-      unselectedItemColor: Colors.white60,
-      items: const [
-        BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-        BottomNavigationBarItem(icon: Icon(Icons.wine_bar), label: 'Discover'),
-        BottomNavigationBarItem(icon: Icon(Icons.event), label: 'Events'),
-        BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Social'),
-      ],
+  // ---------------- EMPTY STATE ----------------
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      AppTheme.secondary.withOpacity(0.2),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+                child: Icon(
+                  Icons.event_busy_rounded,
+                  size: 64,
+                  color: AppTheme.textTertiary,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'No events found',
+                style: Theme.of(context).textTheme.titleLarge,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                searchQuery.isNotEmpty
+                    ? 'Try a different search term'
+                    : 'Check back later for upcoming events',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppTheme.textSecondary,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+              if (searchQuery.isNotEmpty) ...[
+                const SizedBox(height: 32),
+                AppTheme.gradientButtonPurple(
+                  onPressed: () {
+                    setState(() => searchQuery = '');
+                    fetchEvents();
+                  },
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(Icons.clear_rounded, size: 20),
+                      SizedBox(width: 8),
+                      Text('Clear Search'),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

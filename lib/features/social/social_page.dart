@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shimmer/shimmer.dart';
 import '../../config/env_config.dart';
+import '../../core/theme/app_theme.dart';
 
 class SocialPage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -22,6 +24,7 @@ class _SocialPageState extends State<SocialPage>
   late TabController _tabController;
 
   bool loading = true;
+  bool hasError = false;
 
   Map<String, dynamic> stats = {
     'ratings_count': 0,
@@ -65,7 +68,10 @@ class _SocialPageState extends State<SocialPage>
   }
 
   Future<void> fetchAll() async {
-    setState(() => loading = true);
+    setState(() {
+      loading = true;
+      hasError = false;
+    });
 
     try {
       final responses = await Future.wait([
@@ -85,10 +91,14 @@ class _SocialPageState extends State<SocialPage>
           badges = jsonDecode(responses[3].body);
           bookmarks = jsonDecode(responses[4].body);
           friends = jsonDecode(responses[5].body);
+          hasError = false;
         });
       }
-    } catch (_) {
-      _toast('Failed to load profile data');
+    } catch (e) {
+      if (mounted) {
+        setState(() => hasError = true);
+        _toast('Failed to load profile data', isError: true);
+      }
     } finally {
       if (mounted) {
         setState(() => loading = false);
@@ -102,7 +112,7 @@ class _SocialPageState extends State<SocialPage>
     if (diaryForm['beverage_name'].isEmpty ||
         diaryForm['restaurant'].isEmpty ||
         diaryForm['rating'] == 0) {
-      _toast('Fill all required fields');
+      _toast('Fill all required fields', isError: true);
       return;
     }
 
@@ -176,9 +186,19 @@ class _SocialPageState extends State<SocialPage>
     context.go('/auth');
   }
 
-  void _toast(String msg) {
+  void _toast(String msg, {bool isError = false}) {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: isError ? Colors.red.shade600 : AppTheme.card,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+          ),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
     }
   }
 
@@ -187,51 +207,129 @@ class _SocialPageState extends State<SocialPage>
   @override
   Widget build(BuildContext context) {
     if (loading) {
-      return const Scaffold(
-        backgroundColor: Colors.black,
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        backgroundColor: AppTheme.background,
+        body: _buildLoadingSkeleton(),
+      );
+    }
+
+    if (hasError) {
+      return Scaffold(
+        backgroundColor: AppTheme.background,
+        body: _buildErrorState(),
       );
     }
 
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: Column(
-        children: [
-          _header(),
-          TabBar(
-            controller: _tabController,
-            indicatorColor: Colors.amber,
-            labelColor: Colors.amber,
-            unselectedLabelColor: Colors.white60,
-            tabs: const [
-              Tab(text: 'Ratings'),
-              Tab(text: 'Diary'),
-              Tab(text: 'Badges'),
-              Tab(text: 'Saves'),
-              Tab(text: 'Friends'),
-            ],
-          ),
-          Expanded(
-            child: TabBarView(
+      backgroundColor: AppTheme.background,
+      body: RefreshIndicator(
+        onRefresh: fetchAll,
+        color: AppTheme.primary,
+        backgroundColor: AppTheme.card,
+        child: Column(
+          children: [
+            _header(),
+            TabBar(
               controller: _tabController,
-              children: [
-                _ratingsTab(),
-                _diaryTab(),
-                _badgesTab(),
-                _savesTab(),
-                _friendsTab(),
+              indicatorColor: AppTheme.primary,
+              labelColor: AppTheme.primary,
+              unselectedLabelColor: AppTheme.textSecondary,
+              tabs: const [
+                Tab(text: 'Ratings'),
+                Tab(text: 'Diary'),
+                Tab(text: 'Badges'),
+                Tab(text: 'Saves'),
+                Tab(text: 'Friends'),
               ],
             ),
-          ),
-        ],
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _ratingsTab(),
+                  _diaryTab(),
+                  _badgesTab(),
+                  _savesTab(),
+                  _friendsTab(),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
       floatingActionButton: _tabController.index == 1
           ? FloatingActionButton(
-              backgroundColor: Colors.amber,
+              backgroundColor: AppTheme.primary,
               onPressed: () => setState(() => showAddDiary = true),
               child: const Icon(Icons.add, color: Colors.black),
             )
           : null,
+    );
+  }
+
+  Widget _buildLoadingSkeleton() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Shimmer.fromColors(
+            baseColor: AppTheme.card,
+            highlightColor: AppTheme.glassLight,
+            child: CircleAvatar(
+              radius: 48,
+              backgroundColor: AppTheme.card,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Shimmer.fromColors(
+            baseColor: AppTheme.card,
+            highlightColor: AppTheme.glassLight,
+            child: Container(
+              width: 150,
+              height: 24,
+              decoration: BoxDecoration(
+                color: AppTheme.card,
+                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.cloud_off_rounded,
+              size: 64,
+              color: AppTheme.textTertiary,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Unable to load profile',
+              style: Theme.of(context).textTheme.titleMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Check your connection and try again',
+              style: Theme.of(context).textTheme.bodySmall,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            AppTheme.gradientButtonAmber(
+              onPressed: fetchAll,
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -244,7 +342,7 @@ class _SocialPageState extends State<SocialPage>
         children: [
           CircleAvatar(
             radius: 40,
-            backgroundColor: Colors.amber,
+            backgroundColor: AppTheme.primary,
             child: Text(
               widget.user['name'][0].toUpperCase(),
               style: const TextStyle(fontSize: 28, color: Colors.black),
@@ -253,11 +351,11 @@ class _SocialPageState extends State<SocialPage>
           const SizedBox(height: 8),
           Text(
             widget.user['name'],
-            style: const TextStyle(color: Colors.white, fontSize: 22),
+            style: Theme.of(context).textTheme.headlineSmall,
           ),
           Text(
             '@${widget.user['name'].toLowerCase().replaceAll(' ', '')}',
-            style: const TextStyle(color: Colors.white60),
+            style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 12),
           Row(
@@ -269,13 +367,16 @@ class _SocialPageState extends State<SocialPage>
             ],
           ),
           const SizedBox(height: 12),
-          ElevatedButton.icon(
-            onPressed: logout,
-            icon: const Icon(Icons.logout, size: 16),
-            label: const Text('Logout'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
+          SizedBox(
+            height: 44,
+            child: ElevatedButton.icon(
+              onPressed: logout,
+              icon: const Icon(Icons.logout_rounded, size: 16),
+              label: const Text('Logout'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade600,
+                foregroundColor: Colors.white,
+              ),
             ),
           ),
         ],
@@ -288,9 +389,9 @@ class _SocialPageState extends State<SocialPage>
       children: [
         Text(
           '$value',
-          style: const TextStyle(color: Colors.white, fontSize: 20),
+          style: Theme.of(context).textTheme.titleLarge,
         ),
-        Text(label, style: const TextStyle(color: Colors.white60)),
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
       ],
     );
   }
@@ -299,8 +400,9 @@ class _SocialPageState extends State<SocialPage>
 
   Widget _ratingsTab() {
     if (ratings.isEmpty) {
-      return const Center(
-        child: Text('No ratings yet', style: TextStyle(color: Colors.white60)),
+      return Center(
+        child: Text('No ratings yet',
+            style: Theme.of(context).textTheme.bodySmall),
       );
     }
 
@@ -310,24 +412,27 @@ class _SocialPageState extends State<SocialPage>
         final r = ratings[i];
         return ListTile(
           leading: r['beverage']?['image'] != null
-              ? Image.network(
-                  r['beverage']['image'],
-                  width: 50,
-                  height: 50,
-                  fit: BoxFit.cover,
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+                  child: Image.network(
+                    r['beverage']['image'],
+                    width: 50,
+                    height: 50,
+                    fit: BoxFit.cover,
+                  ),
                 )
-              : const Icon(Icons.local_bar, color: Colors.white),
+              : Icon(Icons.local_bar_rounded, color: AppTheme.textSecondary),
           title: Text(
             r['beverage']?['name'] ?? 'Unknown',
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: AppTheme.textPrimary),
           ),
           subtitle: Text(
             r['review'] ?? '',
-            style: const TextStyle(color: Colors.white70),
+            style: const TextStyle(color: AppTheme.textSecondary),
           ),
           trailing: Text(
             '${r['rating']} ⭐',
-            style: const TextStyle(color: Colors.amber),
+            style: const TextStyle(color: AppTheme.primary),
           ),
         );
       },
@@ -336,10 +441,10 @@ class _SocialPageState extends State<SocialPage>
 
   Widget _diaryTab() {
     if (diaryEntries.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           'No diary entries',
-          style: TextStyle(color: Colors.white60),
+          style: Theme.of(context).textTheme.bodySmall,
         ),
       );
     }
@@ -350,20 +455,23 @@ class _SocialPageState extends State<SocialPage>
         final d = diaryEntries[i];
         return ListTile(
           leading: d['photo'] != null && d['photo'].toString().isNotEmpty
-              ? Image.network(
-                  d['photo'],
-                  width: 50,
-                  height: 50,
-                  fit: BoxFit.cover,
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+                  child: Image.network(
+                    d['photo'],
+                    width: 50,
+                    height: 50,
+                    fit: BoxFit.cover,
+                  ),
                 )
-              : const Icon(Icons.local_bar, color: Colors.white),
+              : Icon(Icons.local_bar_rounded, color: AppTheme.textSecondary),
           title: Text(
             d['beverage_name'] ?? 'Unknown',
-            style: const TextStyle(color: Colors.white),
+            style: const TextStyle(color: AppTheme.textPrimary),
           ),
           subtitle: Text(
             d['restaurant'] ?? '',
-            style: const TextStyle(color: Colors.white60),
+            style: const TextStyle(color: AppTheme.textSecondary),
           ),
           onTap: () {
             setState(() {
@@ -390,8 +498,8 @@ class _SocialPageState extends State<SocialPage>
       children: filtered.map((b) {
         return Card(
           color: b['earned'] == true
-              ? Colors.amber.withValues(alpha: .3)
-              : Colors.grey[900],
+              ? AppTheme.primary.withValues(alpha: 0.3)
+              : AppTheme.card,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -399,7 +507,7 @@ class _SocialPageState extends State<SocialPage>
               const SizedBox(height: 8),
               Text(
                 b['name'] ?? 'Badge',
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(color: AppTheme.textPrimary),
               ),
             ],
           ),
@@ -410,8 +518,9 @@ class _SocialPageState extends State<SocialPage>
 
   Widget _savesTab() {
     if (bookmarks.isEmpty) {
-      return const Center(
-        child: Text('No bookmarks', style: TextStyle(color: Colors.white60)),
+      return Center(
+        child:
+            Text('No bookmarks', style: Theme.of(context).textTheme.bodySmall),
       );
     }
 
@@ -420,20 +529,24 @@ class _SocialPageState extends State<SocialPage>
           .map(
             (r) => ListTile(
               leading: r['image'] != null
-                  ? Image.network(
-                      r['image'],
-                      width: 50,
-                      height: 50,
-                      fit: BoxFit.cover,
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+                      child: Image.network(
+                        r['image'],
+                        width: 50,
+                        height: 50,
+                        fit: BoxFit.cover,
+                      ),
                     )
-                  : const Icon(Icons.restaurant, color: Colors.white),
+                  : Icon(Icons.restaurant_rounded,
+                      color: AppTheme.textSecondary),
               title: Text(
                 r['name'] ?? 'Unknown',
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(color: AppTheme.textPrimary),
               ),
               subtitle: Text(
                 r['area'] ?? '',
-                style: const TextStyle(color: Colors.white60),
+                style: const TextStyle(color: AppTheme.textSecondary),
               ),
             ),
           )
@@ -443,8 +556,9 @@ class _SocialPageState extends State<SocialPage>
 
   Widget _friendsTab() {
     if (friends.isEmpty) {
-      return const Center(
-        child: Text('No friends yet', style: TextStyle(color: Colors.white60)),
+      return Center(
+        child: Text('No friends yet',
+            style: Theme.of(context).textTheme.bodySmall),
       );
     }
 
@@ -453,7 +567,7 @@ class _SocialPageState extends State<SocialPage>
           .map(
             (f) => ListTile(
               leading: CircleAvatar(
-                backgroundColor: Colors.purple,
+                backgroundColor: AppTheme.secondary,
                 child: Text(
                   f['name']?[0]?.toUpperCase() ?? 'F',
                   style: const TextStyle(color: Colors.white),
@@ -461,11 +575,11 @@ class _SocialPageState extends State<SocialPage>
               ),
               title: Text(
                 f['name'] ?? 'Unknown',
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(color: AppTheme.textPrimary),
               ),
               subtitle: Text(
                 '@${f['name']?.toLowerCase()?.replaceAll(' ', '') ?? 'unknown'}',
-                style: const TextStyle(color: Colors.white60),
+                style: const TextStyle(color: AppTheme.textSecondary),
               ),
             ),
           )

@@ -20,13 +20,13 @@ class BottomNav extends StatelessWidget {
       ),
       _NavItem(
         id: 'events',
-        label: 'EventS',
+        label: 'Events',
         icon: Icons.calendar_month_rounded,
         route: '/events',
       ),
       _NavItem(
         id: 'social',
-        label: 'SocialZ',
+        label: 'Socials',
         icon: Icons.people_rounded,
         route: '/social',
       ),
