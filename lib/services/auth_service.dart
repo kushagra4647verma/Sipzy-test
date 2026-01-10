@@ -125,8 +125,11 @@ class AuthService {
   /// Get user profile from custom users table
   Future<Map<String, dynamic>?> _getUserProfile(String userId) async {
     try {
-      final response =
-          await _supabase.from('users').select().eq('id', userId).maybeSingle();
+      final response = await _supabase
+          .from('profiles')
+          .select()
+          .eq('id', userId)
+          .maybeSingle();
 
       return response;
     } catch (e) {
@@ -153,14 +156,11 @@ class AuthService {
 
       // Create user profile in your custom users table
       final response = await _supabase
-          .from('users')
+          .from('profiles')
           .insert({
             'id': userId,
             'name': name,
-            'age': age,
             'phone': phone,
-            'country_code': '+91',
-            'created_at': DateTime.now().toIso8601String(),
           })
           .select()
           .single();
