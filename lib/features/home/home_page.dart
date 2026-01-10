@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:go_router/go_router.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../shared/navigation/bottom_nav.dart';
 import '../../core/theme/app_theme.dart';
@@ -18,6 +19,8 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  final _supabase = Supabase.instance.client;
+
   List restaurants = [];
   List<int> bookmarkedIds = [];
 
@@ -40,82 +43,137 @@ class _HomePageState extends State<HomePage> {
     try {
       await Future.wait([fetchRestaurants(), fetchBookmarks()]);
     } catch (e) {
+      print('Error loading data: $e');
       setState(() => hasError = true);
     }
   }
 
+  Future<Map<String, String>> _getHeaders() async {
+    final session = _supabase.auth.currentSession;
+    final user = _supabase.auth.currentUser;
+
+    final headers = {'Content-Type': 'application/json'};
+
+    if (session?.accessToken != null) {
+      headers['Authorization'] = 'Bearer ${session!.accessToken}';
+    }
+
+    if (user?.id != null) {
+      headers['x-user-id'] = user!.id;
+    } else if (widget.user['id'] != null) {
+      headers['x-user-id'] = widget.user['id'].toString();
+    }
+
+    print('🔑 Request headers: ${headers.keys.join(", ")}');
+    return headers;
+  }
+
   Future<void> fetchRestaurants() async {
     try {
-      final userId = widget.user['id'] ?? widget.user['userId'];
+      final headers = await _getHeaders();
       final uri = searchQuery.isNotEmpty
           ? Uri.parse('${ApiService.restaurantService}?search=$searchQuery')
           : Uri.parse(ApiService.restaurantService);
 
-      final response = await http.get(
-        uri,
-        headers: ApiService.getUserHeaders(userId.toString()),
-      );
-      print(ApiService.getUserHeaders(userId.toString()));
+      print('📡 Fetching restaurants from: $uri');
+
+      final response = await http.get(uri, headers: headers);
+
+      print('📡 Response status: ${response.statusCode}');
+      print(
+          '📡 Response body: ${response.body.substring(0, response.body.length > 200 ? 200 : response.body.length)}...');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        setState(() {
-          restaurants =
-              data['success'] == true ? (data['data'] as List) : (data as List);
-          hasError = false;
-        });
+        if (mounted) {
+          setState(() {
+            restaurants = data['success'] == true
+                ? (data['data'] as List? ?? [])
+                : (data is List ? data : []);
+            hasError = false;
+          });
+        }
+      } else if (response.statusCode == 401) {
+        print('❌ Authentication failed - session may have expired');
+        if (mounted) {
+          _toast('Session expired. Please login again.', isError: true);
+          // Optionally redirect to login
+          context.go('/auth');
+        }
       } else {
-        throw Exception('Failed to load restaurants');
+        throw Exception('Failed to load restaurants: ${response.statusCode}');
       }
     } catch (e) {
-      setState(() => hasError = true);
-      _toast('Failed to load restaurants', isError: true);
+      print('❌ Fetch restaurants error: $e');
+      if (mounted) {
+        setState(() => hasError = true);
+        _toast('Failed to load restaurants', isError: true);
+      }
     } finally {
-      setState(() => loading = false);
+      if (mounted) {
+        setState(() => loading = false);
+      }
     }
   }
 
   Future<void> fetchBookmarks() async {
     try {
-      final userId = widget.user['id'] ?? widget.user['userId'];
+      final headers = await _getHeaders();
+      final userId = _supabase.auth.currentUser?.id ?? widget.user['id'];
+
       final response = await http.get(
-        Uri.parse('${ApiService.userService}/me/bookmarks'),
-        headers: ApiService.getUserHeaders(userId.toString()),
+        Uri.parse('${ApiService.userService}/$userId/bookmarks'),
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final bookmarks =
-            data['success'] == true ? (data['data'] as List) : (data as List);
+        final bookmarks = data['success'] == true
+            ? (data['data'] as List? ?? [])
+            : (data is List ? data : []);
 
-        setState(() {
-          bookmarkedIds =
-              bookmarks.map((e) => (e['id'] as num).toInt()).toList();
-        });
+        if (mounted) {
+          setState(() {
+            bookmarkedIds = bookmarks
+                .map((e) => (e['restaurantId'] ?? e['id']) as num)
+                .map((e) => e.toInt())
+                .toList();
+          });
+        }
       }
     } catch (e) {
-      print('Failed to fetch bookmarks: $e');
+      print('⚠️ Failed to fetch bookmarks: $e');
+      // Don't show error for bookmarks - it's not critical
     }
   }
 
   Future<void> toggleBookmark(String restaurantId) async {
     try {
-      final userId = widget.user['id'] ?? widget.user['userId'];
+      final headers = await _getHeaders();
+      final userId = _supabase.auth.currentUser?.id ?? widget.user['id'];
+
       final response = await http.post(
-        Uri.parse('${ApiService.userService}/bookmarks/$restaurantId'),
-        headers: ApiService.getUserHeaders(userId.toString()),
+        Uri.parse('${ApiService.userService}/$userId/bookmarks/$restaurantId'),
+        headers: headers,
       );
 
       if (response.statusCode == 200) {
         await fetchBookmarks();
-        _toast('Bookmark updated');
+        if (mounted) {
+          _toast('Bookmark updated');
+        }
       }
     } catch (e) {
-      _toast('Failed to update bookmark', isError: true);
+      print('❌ Toggle bookmark error: $e');
+      if (mounted) {
+        _toast('Failed to update bookmark', isError: true);
+      }
     }
   }
 
   void _toast(String msg, {bool isError = false}) {
+    if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg),
@@ -137,6 +195,7 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           children: [
             _Header(
+              userName: widget.user['name'] ?? 'User',
               searchQuery: searchQuery,
               onSearch: (v) {
                 setState(() => searchQuery = v);
@@ -179,13 +238,14 @@ class _HomePageState extends State<HomePage> {
         itemCount: restaurants.length,
         itemBuilder: (context, index) {
           final restaurant = restaurants[index];
-          final isBookmarked = bookmarkedIds.contains(restaurant['id']);
+          final restaurantId = restaurant['id'];
+          final isBookmarked = bookmarkedIds.contains(restaurantId);
 
           return _RestaurantCard(
             restaurant: restaurant,
             isBookmarked: isBookmarked,
-            onTap: () => context.push('/restaurant/${restaurant['id']}'),
-            onBookmark: () => toggleBookmark(restaurant['id'].toString()),
+            onTap: () => context.push('/restaurant/$restaurantId'),
+            onBookmark: () => toggleBookmark(restaurantId.toString()),
           );
         },
       ),
@@ -254,45 +314,53 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildEmptyState() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.restaurant_rounded,
-            size: 64,
-            color: AppTheme.textTertiary,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.restaurant_rounded,
+                size: 64,
+                color: AppTheme.textTertiary,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'No restaurants found',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              if (searchQuery.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Try a different search term',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 24),
+                AppTheme.gradientButtonAmber(
+                  onPressed: () {
+                    setState(() => searchQuery = '');
+                    fetchRestaurants();
+                  },
+                  child: const Text('Clear Search'),
+                ),
+              ],
+            ],
           ),
-          const SizedBox(height: 16),
-          Text(
-            'No restaurants found',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          if (searchQuery.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              'Try a different search term',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 24),
-            AppTheme.gradientButtonAmber(
-              onPressed: () {
-                setState(() => searchQuery = '');
-                fetchRestaurants();
-              },
-              child: const Text('Clear Search'),
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }
 }
 
 class _Header extends StatelessWidget {
+  final String userName;
   final String searchQuery;
   final ValueChanged<String> onSearch;
 
   const _Header({
+    required this.userName,
     required this.searchQuery,
     required this.onSearch,
   });
@@ -313,9 +381,20 @@ class _Header extends StatelessWidget {
             children: [
               Icon(Icons.local_bar_rounded, color: AppTheme.primary, size: 28),
               const SizedBox(width: 8),
-              Text(
-                'SipZy',
-                style: Theme.of(context).textTheme.headlineMedium,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'SipZy',
+                      style: Theme.of(context).textTheme.headlineMedium,
+                    ),
+                    Text(
+                      'Welcome, $userName!',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -374,7 +453,7 @@ class _RestaurantCard extends StatelessWidget {
                     top: Radius.circular(AppTheme.radiusLg),
                   ),
                   child: Image.network(
-                    restaurant['image'] ?? '',
+                    restaurant['logoImage'] ?? restaurant['coverImage'] ?? '',
                     height: 120,
                     width: double.infinity,
                     fit: BoxFit.cover,
@@ -432,7 +511,9 @@ class _RestaurantCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    restaurant['area'] ?? '',
+                    restaurant['address'] ?? '',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontSize: 12,
                       color: AppTheme.textSecondary,

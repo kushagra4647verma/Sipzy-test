@@ -4,7 +4,9 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shimmer/shimmer.dart';
-import '../../config/env_config.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../services/api_service.dart';
 import '../../core/theme/app_theme.dart';
 
 class SocialPage extends StatefulWidget {
@@ -19,7 +21,7 @@ class SocialPage extends StatefulWidget {
 
 class _SocialPageState extends State<SocialPage>
     with SingleTickerProviderStateMixin {
-  static const api = EnvConfig.apiBaseUrl;
+  final _supabase = Supabase.instance.client;
 
   late TabController _tabController;
 
@@ -67,6 +69,29 @@ class _SocialPageState extends State<SocialPage>
     super.dispose();
   }
 
+  Future<Map<String, String>> _getHeaders({bool multipart = false}) async {
+    final session = _supabase.auth.currentSession;
+    final user = _supabase.auth.currentUser;
+
+    final headers = <String, String>{};
+
+    if (!multipart) {
+      headers['Content-Type'] = 'application/json';
+    }
+
+    if (session?.accessToken != null) {
+      headers['Authorization'] = 'Bearer ${session!.accessToken}';
+    }
+
+    final effectiveUserId = user?.id ?? widget.user['id']?.toString();
+    if (effectiveUserId != null) {
+      headers['x-user-id'] = effectiveUserId;
+    }
+
+    print('🔑 Social headers: ${headers.keys.join(", ")}');
+    return headers;
+  }
+
   Future<void> fetchAll() async {
     setState(() {
       loading = true;
@@ -74,27 +99,48 @@ class _SocialPageState extends State<SocialPage>
     });
 
     try {
+      final headers = await _getHeaders();
+      final userId = _supabase.auth.currentUser?.id ?? widget.user['id'];
+
       final responses = await Future.wait([
-        http.get(Uri.parse('$api/users/${widget.user['id']}/stats')),
-        http.get(Uri.parse('$api/users/${widget.user['id']}/ratings')),
-        http.get(Uri.parse('$api/diary/${widget.user['id']}')),
-        http.get(Uri.parse('$api/users/${widget.user['id']}/badges')),
-        http.get(Uri.parse('$api/bookmarks/${widget.user['id']}')),
-        http.get(Uri.parse('$api/friends/${widget.user['id']}')),
+        http.get(Uri.parse('${ApiService.userService}/$userId/stats'),
+            headers: headers),
+        http.get(Uri.parse('${ApiService.userService}/$userId/ratings'),
+            headers: headers),
+        http.get(Uri.parse('${ApiService.dairyService}/$userId'),
+            headers: headers),
+        http.get(Uri.parse('${ApiService.userService}/$userId/badges'),
+            headers: headers),
+        http.get(Uri.parse('${ApiService.userService}/$userId/bookmarks'),
+            headers: headers),
+        http.get(Uri.parse('${ApiService.userService}/$userId/friends'),
+            headers: headers),
       ]);
+
+      // Check for auth error in any response
+      for (final res in responses) {
+        if (res.statusCode == 401) {
+          if (mounted) {
+            _toast('Session expired. Please login again.', isError: true);
+            context.go('/auth');
+          }
+          return;
+        }
+      }
 
       if (mounted) {
         setState(() {
-          stats = jsonDecode(responses[0].body);
-          ratings = jsonDecode(responses[1].body);
-          diaryEntries = jsonDecode(responses[2].body);
-          badges = jsonDecode(responses[3].body);
-          bookmarks = jsonDecode(responses[4].body);
-          friends = jsonDecode(responses[5].body);
+          stats = _safeParseJson(responses[0].body, defaultValue: {});
+          ratings = _safeParseArray(responses[1].body);
+          diaryEntries = _safeParseArray(responses[2].body);
+          badges = _safeParseArray(responses[3].body);
+          bookmarks = _safeParseArray(responses[4].body);
+          friends = _safeParseArray(responses[5].body);
           hasError = false;
         });
       }
     } catch (e) {
+      print('❌ Social fetchAll error: $e');
       if (mounted) {
         setState(() => hasError = true);
         _toast('Failed to load profile data', isError: true);
@@ -106,45 +152,123 @@ class _SocialPageState extends State<SocialPage>
     }
   }
 
+  dynamic _safeParseJson(String body, {dynamic defaultValue}) {
+    try {
+      final data = jsonDecode(body);
+      return data['success'] == true ? (data['data'] ?? defaultValue) : data;
+    } catch (_) {
+      return defaultValue;
+    }
+  }
+
+  List _safeParseArray(String body) {
+    try {
+      final data = jsonDecode(body);
+      return data['success'] == true
+          ? (data['data'] as List? ?? [])
+          : (data is List ? data : []);
+    } catch (_) {
+      return [];
+    }
+  }
+
   // ---------------- Diary CRUD ----------------
 
   Future<void> addDiary() async {
     if (diaryForm['beverage_name'].isEmpty ||
         diaryForm['restaurant'].isEmpty ||
         diaryForm['rating'] == 0) {
-      _toast('Fill all required fields', isError: true);
+      _toast('Please fill all required fields', isError: true);
       return;
     }
 
-    await http.post(
-      Uri.parse('$api/diary/add'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'user_id': widget.user['id'], ...diaryForm}),
-    );
+    try {
+      final headers = await _getHeaders();
+      final response = await http.post(
+        Uri.parse('${ApiService.dairyService}/add'),
+        headers: headers,
+        body: jsonEncode({
+          'user_id': widget.user['id'],
+          ...diaryForm,
+        }),
+      );
 
-    _toast('Diary entry added');
-    resetDiary();
-    fetchAll();
+      if (response.statusCode == 401) {
+        _toast('Session expired. Please login again.', isError: true);
+        context.go('/auth');
+        return;
+      }
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        _toast('Diary entry added');
+        resetDiary();
+        fetchAll();
+      } else {
+        _toast('Failed to add diary entry', isError: true);
+      }
+    } catch (e) {
+      print('Add diary error: $e');
+      _toast('Error adding diary', isError: true);
+    }
   }
 
   Future<void> updateDiary() async {
-    await http.put(
-      Uri.parse('$api/diary/entry/${selectedDiary!['id']}'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(diaryForm),
-    );
+    if (selectedDiary == null) return;
 
-    _toast('Diary updated');
-    resetDiary();
-    fetchAll();
+    try {
+      final headers = await _getHeaders();
+      final response = await http.put(
+        Uri.parse('${ApiService.dairyService}/entry/${selectedDiary!['id']}'),
+        headers: headers,
+        body: jsonEncode(diaryForm),
+      );
+
+      if (response.statusCode == 401) {
+        _toast('Session expired. Please login again.', isError: true);
+        context.go('/auth');
+        return;
+      }
+
+      if (response.statusCode == 200) {
+        _toast('Diary updated');
+        resetDiary();
+        fetchAll();
+      } else {
+        _toast('Failed to update diary', isError: true);
+      }
+    } catch (e) {
+      print('Update diary error: $e');
+      _toast('Error updating diary', isError: true);
+    }
   }
 
   Future<void> deleteDiary() async {
-    await http.delete(Uri.parse('$api/diary/entry/${selectedDiary!['id']}'));
+    if (selectedDiary == null) return;
 
-    _toast('Diary deleted');
-    resetDiary();
-    fetchAll();
+    try {
+      final headers = await _getHeaders();
+      final response = await http.delete(
+        Uri.parse('${ApiService.dairyService}/entry/${selectedDiary!['id']}'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 401) {
+        _toast('Session expired. Please login again.', isError: true);
+        context.go('/auth');
+        return;
+      }
+
+      if (response.statusCode == 200) {
+        _toast('Diary deleted');
+        resetDiary();
+        fetchAll();
+      } else {
+        _toast('Failed to delete diary', isError: true);
+      }
+    } catch (e) {
+      print('Delete diary error: $e');
+      _toast('Error deleting diary', isError: true);
+    }
   }
 
   Future<void> uploadDiaryPhoto(ImageSource source) async {
@@ -152,16 +276,37 @@ class _SocialPageState extends State<SocialPage>
     final file = await picker.pickImage(source: source);
     if (file == null) return;
 
-    final req = http.MultipartRequest(
-      'POST',
-      Uri.parse('$api/diary/upload-photo'),
-    );
-    req.files.add(await http.MultipartFile.fromPath('file', file.path));
+    try {
+      final headers = await _getHeaders(multipart: true);
 
-    final res = await req.send();
-    if (res.statusCode == 200) {
-      final body = jsonDecode(await res.stream.bytesToString());
-      setState(() => diaryForm['photo'] = body['photo_url']);
+      final req = http.MultipartRequest(
+        'POST',
+        Uri.parse('${ApiService.dairyService}/upload-photo'),
+      );
+
+      req.headers.addAll(headers);
+      req.files.add(await http.MultipartFile.fromPath('file', file.path));
+
+      final res = await req.send();
+
+      if (res.statusCode == 401) {
+        _toast('Session expired. Please login again.', isError: true);
+        context.go('/auth');
+        return;
+      }
+
+      if (res.statusCode == 200) {
+        final body = jsonDecode(await res.stream.bytesToString());
+        setState(() {
+          diaryForm['photo'] = body['photo_url'] ?? '';
+        });
+        _toast('Photo uploaded successfully');
+      } else {
+        _toast('Failed to upload photo', isError: true);
+      }
+    } catch (e) {
+      print('Photo upload error: $e');
+      _toast('Error uploading photo', isError: true);
     }
   }
 
@@ -187,22 +332,20 @@ class _SocialPageState extends State<SocialPage>
   }
 
   void _toast(String msg, {bool isError = false}) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msg),
-          backgroundColor: isError ? Colors.red.shade600 : AppTheme.card,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-          ),
-          margin: const EdgeInsets.all(16),
-        ),
-      );
-    }
-  }
+    if (!mounted) return;
 
-  // ---------------- UI ----------------
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: isError ? Colors.red.shade600 : AppTheme.card,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        ),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -266,6 +409,8 @@ class _SocialPageState extends State<SocialPage>
           : null,
     );
   }
+
+  // ── Loading, Error, Header, Tabs ─────────────────────────────────────────────
 
   Widget _buildLoadingSkeleton() {
     return Center(
@@ -333,8 +478,6 @@ class _SocialPageState extends State<SocialPage>
     );
   }
 
-  // ---------------- Header ----------------
-
   Widget _header() {
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -344,17 +487,17 @@ class _SocialPageState extends State<SocialPage>
             radius: 40,
             backgroundColor: AppTheme.primary,
             child: Text(
-              widget.user['name'][0].toUpperCase(),
+              widget.user['name']?[0]?.toUpperCase() ?? '?',
               style: const TextStyle(fontSize: 28, color: Colors.black),
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            widget.user['name'],
+            widget.user['name'] ?? 'User',
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           Text(
-            '@${widget.user['name'].toLowerCase().replaceAll(' ', '')}',
+            '@${(widget.user['name'] ?? 'user').toLowerCase().replaceAll(' ', '')}',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 12),
@@ -396,8 +539,6 @@ class _SocialPageState extends State<SocialPage>
     );
   }
 
-  // ---------------- Tabs ----------------
-
   Widget _ratingsTab() {
     if (ratings.isEmpty) {
       return Center(
@@ -431,7 +572,7 @@ class _SocialPageState extends State<SocialPage>
             style: const TextStyle(color: AppTheme.textSecondary),
           ),
           trailing: Text(
-            '${r['rating']} ⭐',
+            '${r['rating'] ?? '?'} ⭐',
             style: const TextStyle(color: AppTheme.primary),
           ),
         );
@@ -442,10 +583,8 @@ class _SocialPageState extends State<SocialPage>
   Widget _diaryTab() {
     if (diaryEntries.isEmpty) {
       return Center(
-        child: Text(
-          'No diary entries',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
+        child: Text('No diary entries yet',
+            style: Theme.of(context).textTheme.bodySmall),
       );
     }
 
@@ -498,7 +637,7 @@ class _SocialPageState extends State<SocialPage>
       children: filtered.map((b) {
         return Card(
           color: b['earned'] == true
-              ? AppTheme.primary.withValues(alpha: 0.3)
+              ? AppTheme.primary.withOpacity(0.3)
               : AppTheme.card,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -508,6 +647,7 @@ class _SocialPageState extends State<SocialPage>
               Text(
                 b['name'] ?? 'Badge',
                 style: const TextStyle(color: AppTheme.textPrimary),
+                textAlign: TextAlign.center,
               ),
             ],
           ),
@@ -519,38 +659,35 @@ class _SocialPageState extends State<SocialPage>
   Widget _savesTab() {
     if (bookmarks.isEmpty) {
       return Center(
-        child:
-            Text('No bookmarks', style: Theme.of(context).textTheme.bodySmall),
+        child: Text('No bookmarks yet',
+            style: Theme.of(context).textTheme.bodySmall),
       );
     }
 
     return ListView(
-      children: bookmarks
-          .map(
-            (r) => ListTile(
-              leading: r['image'] != null
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-                      child: Image.network(
-                        r['image'],
-                        width: 50,
-                        height: 50,
-                        fit: BoxFit.cover,
-                      ),
-                    )
-                  : Icon(Icons.restaurant_rounded,
-                      color: AppTheme.textSecondary),
-              title: Text(
-                r['name'] ?? 'Unknown',
-                style: const TextStyle(color: AppTheme.textPrimary),
-              ),
-              subtitle: Text(
-                r['area'] ?? '',
-                style: const TextStyle(color: AppTheme.textSecondary),
-              ),
-            ),
-          )
-          .toList(),
+      children: bookmarks.map((r) {
+        return ListTile(
+          leading: r['image'] != null
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+                  child: Image.network(
+                    r['image'],
+                    width: 50,
+                    height: 50,
+                    fit: BoxFit.cover,
+                  ),
+                )
+              : Icon(Icons.restaurant_rounded, color: AppTheme.textSecondary),
+          title: Text(
+            r['name'] ?? 'Unknown',
+            style: const TextStyle(color: AppTheme.textPrimary),
+          ),
+          subtitle: Text(
+            r['area'] ?? r['address'] ?? '',
+            style: const TextStyle(color: AppTheme.textSecondary),
+          ),
+        );
+      }).toList(),
     );
   }
 
@@ -563,27 +700,25 @@ class _SocialPageState extends State<SocialPage>
     }
 
     return ListView(
-      children: friends
-          .map(
-            (f) => ListTile(
-              leading: CircleAvatar(
-                backgroundColor: AppTheme.secondary,
-                child: Text(
-                  f['name']?[0]?.toUpperCase() ?? 'F',
-                  style: const TextStyle(color: Colors.white),
-                ),
-              ),
-              title: Text(
-                f['name'] ?? 'Unknown',
-                style: const TextStyle(color: AppTheme.textPrimary),
-              ),
-              subtitle: Text(
-                '@${f['name']?.toLowerCase()?.replaceAll(' ', '') ?? 'unknown'}',
-                style: const TextStyle(color: AppTheme.textSecondary),
-              ),
+      children: friends.map((f) {
+        return ListTile(
+          leading: CircleAvatar(
+            backgroundColor: AppTheme.secondary,
+            child: Text(
+              f['name']?[0]?.toUpperCase() ?? 'F',
+              style: const TextStyle(color: Colors.white),
             ),
-          )
-          .toList(),
+          ),
+          title: Text(
+            f['name'] ?? 'Unknown',
+            style: const TextStyle(color: AppTheme.textPrimary),
+          ),
+          subtitle: Text(
+            '@${(f['name'] ?? 'unknown').toLowerCase().replaceAll(' ', '')}',
+            style: const TextStyle(color: AppTheme.textSecondary),
+          ),
+        );
+      }).toList(),
     );
   }
 }

@@ -1,15 +1,17 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shimmer/shimmer.dart';
-import '../../config/env_config.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../services/api_service.dart'; // ← add this
 import '../../core/theme/app_theme.dart';
 import '../../shared/navigation/bottom_nav.dart';
 
 class EventsPage extends StatefulWidget {
   final Map<String, dynamic> user;
-
   const EventsPage({super.key, required this.user});
 
   @override
@@ -17,7 +19,7 @@ class EventsPage extends StatefulWidget {
 }
 
 class _EventsPageState extends State<EventsPage> {
-  static const api = EnvConfig.apiBaseUrl;
+  final _supabase = Supabase.instance.client;
 
   List events = [];
   bool loading = true;
@@ -30,6 +32,25 @@ class _EventsPageState extends State<EventsPage> {
     fetchEvents();
   }
 
+  Future<Map<String, String>> _getHeaders() async {
+    final session = _supabase.auth.currentSession;
+    final user = _supabase.auth.currentUser;
+
+    final headers = {'Content-Type': 'application/json'};
+
+    if (session?.accessToken != null) {
+      headers['Authorization'] = 'Bearer ${session!.accessToken}';
+    }
+
+    if (user?.id != null) {
+      headers['x-user-id'] = user!.id;
+    } else if (widget.user['id'] != null) {
+      headers['x-user-id'] = widget.user['id'].toString();
+    }
+
+    return headers;
+  }
+
   Future<void> fetchEvents() async {
     setState(() {
       loading = true;
@@ -37,22 +58,48 @@ class _EventsPageState extends State<EventsPage> {
     });
 
     try {
+      final headers = await _getHeaders();
+
       final query = searchQuery.isNotEmpty ? '?search=$searchQuery' : '';
-      final res = await http.get(Uri.parse('$api/events$query'));
+      final uri = Uri.parse('${ApiService.eventService}$query');
+
+      print('📡 Fetching events from: $uri');
+
+      final res = await http.get(uri, headers: headers);
+
+      print('Status: ${res.statusCode}');
 
       if (res.statusCode == 200) {
-        setState(() {
-          events = jsonDecode(res.body);
-          hasError = false;
-        });
+        final data = jsonDecode(res.body);
+        if (mounted) {
+          setState(() {
+            events = data['success'] == true
+                ? (data['data'] as List? ?? [])
+                : (data is List ? data : []);
+            hasError = false;
+          });
+        }
+      } else if (res.statusCode == 401) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('Session expired. Please login again.')),
+          );
+          context.go('/auth');
+        }
       } else {
-        throw Exception('Failed to load events');
+        throw Exception('Failed to load events: ${res.statusCode}');
       }
     } catch (e) {
-      setState(() => hasError = true);
-      _toast('Failed to load events', isError: true);
+      print('Fetch events error: $e');
+      if (mounted) {
+        setState(() => hasError = true);
+        _toast('Failed to load events', isError: true);
+      }
     } finally {
-      setState(() => loading = false);
+      if (mounted) {
+        setState(() => loading = false);
+      }
     }
   }
 
@@ -60,13 +107,19 @@ class _EventsPageState extends State<EventsPage> {
     final uri = Uri.parse('tel:+918012345678');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
-      _toast('Booking ${event['name']}...');
+      if (mounted) {
+        _toast('Booking ${event['name']}...');
+      }
     } else {
-      _toast('Unable to make call', isError: true);
+      if (mounted) {
+        _toast('Unable to make call', isError: true);
+      }
     }
   }
 
   void _toast(String msg, {bool isError = false}) {
+    if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg),
@@ -130,6 +183,8 @@ class _EventsPageState extends State<EventsPage> {
                                         ),
                                       if (more.isNotEmpty)
                                         _buildSection('More Events', more),
+                                      // Add extra padding at bottom for navbar
+                                      const SizedBox(height: 80),
                                     ],
                                   ),
                                 ),
@@ -188,7 +243,7 @@ class _EventsPageState extends State<EventsPage> {
           const SizedBox(height: 16),
           TextField(
             onChanged: (v) {
-              searchQuery = v;
+              setState(() => searchQuery = v);
               fetchEvents();
             },
             style: const TextStyle(color: AppTheme.textPrimary),
@@ -625,7 +680,7 @@ class _EventsPageState extends State<EventsPage> {
                   },
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
-                    children: const [
+                    children: [
                       Icon(Icons.clear_rounded, size: 20),
                       SizedBox(width: 8),
                       Text('Clear Search'),
