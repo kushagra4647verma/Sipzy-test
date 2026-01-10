@@ -1,35 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/theme/app_theme.dart';
 
+/// Modern Bottom Navigation Bar
+/// Matches React Native design with 3 tabs (Games removed)
 class BottomNav extends StatelessWidget {
   final String active;
 
   const BottomNav({super.key, required this.active});
 
-  void _navigate(BuildContext context, String route) {
-    context.go(route);
-  }
-
   @override
   Widget build(BuildContext context) {
     final tabs = [
-      _NavItem(id: 'sipzy', label: 'SipZy', icon: Icons.local_bar, route: '/'),
       _NavItem(
-        id: 'games',
-        label: 'GameS',
-        icon: Icons.gamepad,
-        route: '/games',
+        id: 'sipzy',
+        label: 'SipZy',
+        icon: Icons.local_bar_rounded,
+        route: '/',
       ),
       _NavItem(
         id: 'events',
         label: 'EventS',
-        icon: Icons.event,
+        icon: Icons.calendar_month_rounded,
         route: '/events',
       ),
       _NavItem(
         id: 'social',
         label: 'SocialZ',
-        icon: Icons.people,
+        icon: Icons.people_rounded,
         route: '/social',
       ),
     ];
@@ -38,16 +36,22 @@ class BottomNav extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 8,
+            vertical: 12,
+          ),
           decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.75),
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: Colors.white24),
-            boxShadow: const [
+            color: AppTheme.glassStrong,
+            borderRadius: BorderRadius.circular(AppTheme.radius2xl),
+            border: Border.all(
+              color: AppTheme.border.withOpacity(0.2),
+              width: 1,
+            ),
+            boxShadow: [
               BoxShadow(
-                color: Colors.black54,
+                color: Colors.black.withOpacity(0.3),
                 blurRadius: 20,
-                offset: Offset(0, 10),
+                offset: const Offset(0, 10),
               ),
             ],
           ),
@@ -56,40 +60,56 @@ class BottomNav extends StatelessWidget {
             children: tabs.map((tab) {
               final isActive = tab.id == active;
 
-              return GestureDetector(
-                onTap: () => _navigate(context, tab.route),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    gradient: isActive
-                        ? const LinearGradient(
-                            colors: [Color(0xFFFFC107), Color(0xFFFF9800)],
-                          )
-                        : null,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        tab.icon,
-                        size: 22,
-                        color: isActive ? Colors.black : Colors.white60,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        tab.label,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: isActive ? Colors.black : Colors.white60,
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    if (!isActive) {
+                      context.go(tab.route);
+                    }
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeInOut,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      gradient: isActive
+                          ? const LinearGradient(
+                              colors: [
+                                AppTheme.primary,
+                                AppTheme.primaryLight,
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            )
+                          : null,
+                      borderRadius: BorderRadius.circular(AppTheme.radiusXl),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          tab.icon,
+                          size: 22,
+                          color:
+                              isActive ? Colors.black : AppTheme.textSecondary,
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 4),
+                        Text(
+                          tab.label,
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: isActive
+                                ? Colors.black
+                                : AppTheme.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               );

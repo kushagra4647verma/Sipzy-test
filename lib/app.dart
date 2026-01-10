@@ -10,7 +10,6 @@ import 'features/auth/auth_page.dart';
 import 'features/home/home_page.dart';
 import 'features/restaurant/restaurant_detail.dart';
 import 'features/beverage/beverage_detail_page.dart';
-import 'features/games/games_page.dart';
 import 'features/events/events_page.dart';
 import 'features/social/social_page.dart';
 
@@ -138,11 +137,6 @@ class _SipZyAppState extends State<SipZyApp> {
           user: auth.user!,
           beverageId: state.pathParameters['id']!,
         ),
-      ),
-      GoRoute(
-        path: '/games',
-        name: 'games',
-        builder: (context, state) => GamesPage(user: auth.user!),
       ),
       GoRoute(
         path: '/events',

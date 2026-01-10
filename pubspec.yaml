@@ -9,21 +9,37 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
-  # State Management & Navigation
   go_router: ^14.0.0
-
-  # HTTP & API
   http: ^1.2.0
   supabase_flutter: ^2.5.0
-
-  # Utilities
   url_launcher: ^6.2.0
   image_picker: ^1.0.7
   shared_preferences: ^2.2.2
-  # UI
   cupertino_icons: ^1.0.2
+  google_fonts: ^6.1.0
+  shimmer: ^3.0.0
+  cached_network_image: ^3.3.1
 
+fonts:
+  - family: SpaceGrotesk
+    fonts:
+      - asset: assets/fonts/SpaceGrotesk-Regular.ttf
+        weight: 400
+      - asset: assets/fonts/SpaceGrotesk-Medium.ttf
+        weight: 500
+      - asset: assets/fonts/SpaceGrotesk-SemiBold.ttf
+        weight: 600
+      - asset: assets/fonts/SpaceGrotesk-Bold.ttf
+        weight: 700
+
+  - family: Inter
+    fonts:
+      - asset: assets/fonts/Inter-Regular.ttf
+        weight: 400
+      - asset: assets/fonts/Inter-Medium.ttf
+        weight: 500
+      - asset: assets/fonts/Inter-SemiBold.ttf
+        weight: 600
 dev_dependencies:
   flutter_test:
     sdk: flutter
