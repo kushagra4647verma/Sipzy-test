@@ -6,9 +6,9 @@ import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../services/api_service.dart'; // ← add this
 import '../../core/theme/app_theme.dart';
 import '../../shared/navigation/bottom_nav.dart';
+import '../../config/env_config.dart';
 
 class EventsPage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -60,38 +60,56 @@ class _EventsPageState extends State<EventsPage> {
     try {
       final headers = await _getHeaders();
 
-      final query = searchQuery.isNotEmpty ? '?search=$searchQuery' : '';
-      final uri = Uri.parse('${ApiService.eventService}$query');
+      // GET /events - Backend should query restaurantEvents table
+      final uri = Uri.parse('${EnvConfig.apiBaseUrl}/events');
 
       print('📡 Fetching events from: $uri');
 
       final res = await http.get(uri, headers: headers);
 
-      print('Status: ${res.statusCode}');
+      print('📡 Response status: ${res.statusCode}');
+      print(
+          '📡 Response body preview: ${res.body.substring(0, res.body.length > 200 ? 200 : res.body.length)}...');
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
+
         if (mounted) {
           setState(() {
-            events = data['success'] == true
-                ? (data['data'] as List? ?? [])
-                : (data is List ? data : []);
+            // Handle both response formats
+            if (data is Map && data.containsKey('success')) {
+              events = (data['data'] as List? ?? []);
+            } else if (data is List) {
+              events = data;
+            } else {
+              events = [];
+            }
+
+            // Apply search filter if needed
+            if (searchQuery.isNotEmpty) {
+              events = events.where((e) {
+                final name = (e['name'] ?? '').toString().toLowerCase();
+                final description =
+                    (e['description'] ?? '').toString().toLowerCase();
+                final query = searchQuery.toLowerCase();
+
+                return name.contains(query) || description.contains(query);
+              }).toList();
+            }
+
             hasError = false;
           });
         }
       } else if (res.statusCode == 401) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('Session expired. Please login again.')),
-          );
+          _toast('Session expired. Please login again.', isError: true);
           context.go('/auth');
         }
       } else {
         throw Exception('Failed to load events: ${res.statusCode}');
       }
     } catch (e) {
-      print('Fetch events error: $e');
+      print('❌ Fetch events error: $e');
       if (mounted) {
         setState(() => hasError = true);
         _toast('Failed to load events', isError: true);
@@ -104,6 +122,18 @@ class _EventsPageState extends State<EventsPage> {
   }
 
   void bookNow(Map event) async {
+    // Use bookingLink if available, otherwise fallback to phone
+    final bookingLink = event['bookinglink'] ?? event['bookingLink'];
+
+    if (bookingLink != null && bookingLink.toString().isNotEmpty) {
+      final uri = Uri.parse(bookingLink);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        return;
+      }
+    }
+
+    // Fallback to phone call
     final uri = Uri.parse('tel:+918012345678');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
@@ -136,13 +166,8 @@ class _EventsPageState extends State<EventsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final featured = events.where((e) => e['featured'] == true).toList();
-    final trending = events
-        .where((e) => e['trending'] == true && e['featured'] != true)
-        .toList();
-    final more = events
-        .where((e) => e['featured'] != true && e['trending'] != true)
-        .toList();
+    // Note: featured/trending flags don't exist in schema
+    // Backend should handle this logic or we show all events equally
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -161,32 +186,14 @@ class _EventsPageState extends State<EventsPage> {
                           backgroundColor: AppTheme.card,
                           child: events.isEmpty
                               ? _buildEmptyState()
-                              : SingleChildScrollView(
+                              : ListView.builder(
                                   padding: const EdgeInsets.all(16),
                                   physics:
                                       const AlwaysScrollableScrollPhysics(),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      if (featured.isNotEmpty)
-                                        _buildSection(
-                                          'Featured Events',
-                                          featured,
-                                          tag: 'Featured',
-                                        ),
-                                      if (trending.isNotEmpty)
-                                        _buildSection(
-                                          'Trending Near You',
-                                          trending,
-                                          tag: 'Trending',
-                                        ),
-                                      if (more.isNotEmpty)
-                                        _buildSection('More Events', more),
-                                      // Add extra padding at bottom for navbar
-                                      const SizedBox(height: 80),
-                                    ],
-                                  ),
+                                  itemCount: events.length,
+                                  itemBuilder: (context, index) {
+                                    return _buildEventCard(events[index]);
+                                  },
                                 ),
                         ),
             ),
@@ -196,8 +203,6 @@ class _EventsPageState extends State<EventsPage> {
       bottomNavigationBar: const BottomNav(active: 'events'),
     );
   }
-
-  // ---------------- HEADER ----------------
 
   Widget _buildHeader() {
     return Container(
@@ -268,45 +273,25 @@ class _EventsPageState extends State<EventsPage> {
     );
   }
 
-  // ---------------- SECTIONS ----------------
+  Widget _buildEventCard(Map event) {
+    // Schema fields: id, restaurantid, name, photo, eventDate, eventTime,
+    // bookingLink, description, createdat, updatedat
 
-  Widget _buildSection(String title, List list, {String? tag}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 24),
-        Row(
-          children: [
-            Container(
-              width: 4,
-              height: 24,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: tag == 'Featured'
-                      ? [AppTheme.primary, AppTheme.primaryLight]
-                      : [AppTheme.secondary, AppTheme.secondaryLight],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              title,
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        ...list.map((event) => _buildEventCard(event, tag: tag)),
-      ],
-    );
-  }
+    final eventDate = event['eventdate'] ?? event['eventDate'];
+    final eventTime = event['eventtime'] ?? event['eventTime'];
+    final photo = event['photo'];
+    final name = event['name'] ?? 'Event';
+    final description = event['description'] ?? '';
 
-  // ---------------- EVENT CARD ----------------
+    // Format date and time
+    String dateTimeStr = 'Date TBA';
+    if (eventDate != null) {
+      dateTimeStr = eventDate.toString().split('T')[0]; // Basic date formatting
+      if (eventTime != null) {
+        dateTimeStr += ' at $eventTime';
+      }
+    }
 
-  Widget _buildEventCard(Map event, {String? tag}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -324,143 +309,73 @@ class _EventsPageState extends State<EventsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Image Header
-          Stack(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.vertical(
-                  top: Radius.circular(AppTheme.radiusLg),
-                ),
-                child: Image.network(
-                  event['image'],
-                  height: 200,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      height: 200,
-                      decoration: BoxDecoration(
-                        color: AppTheme.glassLight,
-                        borderRadius: BorderRadius.vertical(
-                          top: Radius.circular(AppTheme.radiusLg),
-                        ),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.event_rounded,
-                            size: 48,
-                            color: AppTheme.textTertiary,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Image unavailable',
-                            style: TextStyle(
-                              color: AppTheme.textTertiary,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
+          // Event Photo
+          if (photo != null && photo.toString().isNotEmpty)
+            ClipRRect(
+              borderRadius: BorderRadius.vertical(
+                top: Radius.circular(AppTheme.radiusLg),
               ),
-              // Tag Badge
-              if (tag != null)
-                Positioned(
-                  top: 12,
-                  left: 12,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      gradient: LinearGradient(
-                        colors: tag == 'Featured'
-                            ? [AppTheme.primary, AppTheme.primaryLight]
-                            : [AppTheme.secondary, AppTheme.secondaryLight],
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: (tag == 'Featured'
-                                  ? AppTheme.primary
-                                  : AppTheme.secondary)
-                              .withOpacity(0.4),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          tag == 'Featured'
-                              ? Icons.star_rounded
-                              : Icons.trending_up_rounded,
-                          size: 14,
-                          color:
-                              tag == 'Featured' ? Colors.black : Colors.white,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          tag,
-                          style: TextStyle(
-                            color:
-                                tag == 'Featured' ? Colors.black : Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          ),
+              child: Image.network(
+                photo,
+                height: 200,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return _buildPlaceholderImage();
+                },
+              ),
+            )
+          else
+            _buildPlaceholderImage(),
 
-          // Content
+          // Event Details
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  event['name'],
+                  name,
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  event['description'],
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppTheme.textSecondary,
-                      ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                if (description.isNotEmpty)
+                  Text(
+                    description,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppTheme.textSecondary,
+                        ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 const SizedBox(height: 16),
 
-                // Date & Location
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildInfoChip(
-                        icon: Icons.calendar_today_rounded,
-                        label: event['date'],
+                // Date/Time Info
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppTheme.glassLight,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                    border: Border.all(color: AppTheme.border),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.calendar_today_rounded,
+                        size: 14,
+                        color: AppTheme.textTertiary,
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _buildInfoChip(
-                        icon: Icons.location_on_rounded,
-                        label: event['location'],
+                      const SizedBox(width: 6),
+                      Text(
+                        dateTimeStr,
+                        style: Theme.of(context).textTheme.bodySmall,
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
 
                 const SizedBox(height: 16),
@@ -469,41 +384,23 @@ class _EventsPageState extends State<EventsPage> {
                 SizedBox(
                   width: double.infinity,
                   height: 48,
-                  child: tag == 'Featured'
-                      ? AppTheme.gradientButtonAmber(
-                          onPressed: () => bookNow(event),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: const [
-                              Icon(Icons.phone_rounded, size: 18),
-                              SizedBox(width: 8),
-                              Text(
-                                'Book Now',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      : AppTheme.gradientButtonPurple(
-                          onPressed: () => bookNow(event),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: const [
-                              Icon(Icons.phone_rounded, size: 18),
-                              SizedBox(width: 8),
-                              Text(
-                                'Book Now',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
+                  child: AppTheme.gradientButtonPurple(
+                    onPressed: () => bookNow(event),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.calendar_month_rounded, size: 18),
+                        SizedBox(width: 8),
+                        Text(
+                          'Book Event',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -513,39 +410,35 @@ class _EventsPageState extends State<EventsPage> {
     );
   }
 
-  Widget _buildInfoChip({required IconData icon, required String label}) {
+  Widget _buildPlaceholderImage() {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 8,
-      ),
+      height: 200,
       decoration: BoxDecoration(
         color: AppTheme.glassLight,
-        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-        border: Border.all(color: AppTheme.border),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppTheme.radiusLg),
+        ),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            icon,
-            size: 14,
+            Icons.event_rounded,
+            size: 48,
             color: AppTheme.textTertiary,
           ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.bodySmall,
-              overflow: TextOverflow.ellipsis,
+          const SizedBox(height: 8),
+          Text(
+            'No image available',
+            style: TextStyle(
+              color: AppTheme.textTertiary,
+              fontSize: 12,
             ),
           ),
         ],
       ),
     );
   }
-
-  // ---------------- LOADING SKELETON ----------------
 
   Widget _buildLoadingSkeleton() {
     return ListView.builder(
@@ -568,8 +461,6 @@ class _EventsPageState extends State<EventsPage> {
       },
     );
   }
-
-  // ---------------- ERROR STATE ----------------
 
   Widget _buildErrorState() {
     return Center(
@@ -626,8 +517,6 @@ class _EventsPageState extends State<EventsPage> {
       ),
     );
   }
-
-  // ---------------- EMPTY STATE ----------------
 
   Widget _buildEmptyState() {
     return Center(

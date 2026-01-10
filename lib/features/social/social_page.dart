@@ -1,13 +1,12 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:image_picker/image_picker.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../services/api_service.dart';
 import '../../core/theme/app_theme.dart';
+import '../../config/env_config.dart';
 
 class SocialPage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -28,38 +27,21 @@ class _SocialPageState extends State<SocialPage>
   bool loading = true;
   bool hasError = false;
 
+  // User stats from badges table
   Map<String, dynamic> stats = {
-    'ratings_count': 0,
-    'friends_count': 0,
-    'bookmarks_count': 0,
+    'ratingsCount': 0,
+    'friendsCount': 0,
+    'bookmarkCount': 0,
   };
 
-  List ratings = [];
   List diaryEntries = [];
-  List badges = [];
   List bookmarks = [];
   List friends = [];
-
-  // Diary state
-  bool showAddDiary = false;
-  bool showEditDiary = false;
-  Map<String, dynamic>? selectedDiary;
-
-  Map<String, dynamic> diaryForm = {
-    'beverage_name': '',
-    'restaurant': '',
-    'rating': 0,
-    'notes': '',
-    'photo': '',
-    'share_to_feed': false,
-  };
-
-  String badgeFilter = 'all';
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 3, vsync: this); // Only 3 tabs now
     fetchAll();
   }
 
@@ -69,15 +51,11 @@ class _SocialPageState extends State<SocialPage>
     super.dispose();
   }
 
-  Future<Map<String, String>> _getHeaders({bool multipart = false}) async {
+  Future<Map<String, String>> _getHeaders() async {
     final session = _supabase.auth.currentSession;
     final user = _supabase.auth.currentUser;
 
-    final headers = <String, String>{};
-
-    if (!multipart) {
-      headers['Content-Type'] = 'application/json';
-    }
+    final headers = {'Content-Type': 'application/json'};
 
     if (session?.accessToken != null) {
       headers['Authorization'] = 'Bearer ${session!.accessToken}';
@@ -88,7 +66,6 @@ class _SocialPageState extends State<SocialPage>
       headers['x-user-id'] = effectiveUserId;
     }
 
-    print('🔑 Social headers: ${headers.keys.join(", ")}');
     return headers;
   }
 
@@ -100,25 +77,36 @@ class _SocialPageState extends State<SocialPage>
 
     try {
       final headers = await _getHeaders();
-      final userId = _supabase.auth.currentUser?.id ?? widget.user['id'];
 
+      print('📡 Fetching social data with headers: ${headers.keys.join(", ")}');
+
+      // Using correct endpoints matching your database schema
       final responses = await Future.wait([
-        http.get(Uri.parse('${ApiService.userService}/$userId/stats'),
-            headers: headers),
-        http.get(Uri.parse('${ApiService.userService}/$userId/ratings'),
-            headers: headers),
-        http.get(Uri.parse('${ApiService.dairyService}/$userId'),
-            headers: headers),
-        http.get(Uri.parse('${ApiService.userService}/$userId/badges'),
-            headers: headers),
-        http.get(Uri.parse('${ApiService.userService}/$userId/bookmarks'),
-            headers: headers),
-        http.get(Uri.parse('${ApiService.userService}/$userId/friends'),
-            headers: headers),
+        // GET /users/me - should return user profile + badge stats
+        http.get(
+          Uri.parse('${EnvConfig.apiBaseUrl}/users/me'),
+          headers: headers,
+        ),
+        // GET /diary
+        http.get(
+          Uri.parse('${EnvConfig.apiBaseUrl}/diary'),
+          headers: headers,
+        ),
+        // GET /users/me/bookmarks
+        http.get(
+          Uri.parse('${EnvConfig.apiBaseUrl}/users/me/bookmarks'),
+          headers: headers,
+        ),
+        // GET /users/me/friends
+        http.get(
+          Uri.parse('${EnvConfig.apiBaseUrl}/users/me/friends'),
+          headers: headers,
+        ),
       ]);
 
       // Check for auth error in any response
       for (final res in responses) {
+        print('Response status: ${res.statusCode}');
         if (res.statusCode == 401) {
           if (mounted) {
             _toast('Session expired. Please login again.', isError: true);
@@ -130,12 +118,20 @@ class _SocialPageState extends State<SocialPage>
 
       if (mounted) {
         setState(() {
-          stats = _safeParseJson(responses[0].body, defaultValue: {});
-          ratings = _safeParseArray(responses[1].body);
-          diaryEntries = _safeParseArray(responses[2].body);
-          badges = _safeParseArray(responses[3].body);
-          bookmarks = _safeParseArray(responses[4].body);
-          friends = _safeParseArray(responses[5].body);
+          // Parse user/stats data (from badges table)
+          final userData = _safeParseJson(responses[0].body, defaultValue: {});
+          stats = {
+            'ratingsCount':
+                userData['ratingscount'] ?? userData['ratingsCount'] ?? 0,
+            'friendsCount':
+                userData['friendscount'] ?? userData['friendsCount'] ?? 0,
+            'bookmarkCount':
+                userData['bookmarkcount'] ?? userData['bookmarkCount'] ?? 0,
+          };
+
+          diaryEntries = _safeParseArray(responses[1].body);
+          bookmarks = _safeParseArray(responses[2].body);
+          friends = _safeParseArray(responses[3].body);
           hasError = false;
         });
       }
@@ -174,24 +170,36 @@ class _SocialPageState extends State<SocialPage>
 
   // ---------------- Diary CRUD ----------------
 
-  Future<void> addDiary() async {
-    if (diaryForm['beverage_name'].isEmpty ||
-        diaryForm['restaurant'].isEmpty ||
-        diaryForm['rating'] == 0) {
-      _toast('Please fill all required fields', isError: true);
+  Future<void> addDiary({
+    required String bevName,
+    required String restaurant,
+    required int rating,
+    String? notes,
+    String? image,
+  }) async {
+    if (bevName.isEmpty || restaurant.isEmpty || rating < 1 || rating > 5) {
+      _toast('Please fill all required fields correctly', isError: true);
       return;
     }
 
     try {
       final headers = await _getHeaders();
+
+      // POST /diary
+      // Schema: entryId, userId, bevName, restaurant, rating, notes, image
       final response = await http.post(
-        Uri.parse('${ApiService.dairyService}/add'),
+        Uri.parse('${EnvConfig.apiBaseUrl}/diary'),
         headers: headers,
         body: jsonEncode({
-          'user_id': widget.user['id'],
-          ...diaryForm,
+          'bevName': bevName,
+          'restaurant': restaurant,
+          'rating': rating,
+          'notes': notes ?? '',
+          'image': image ?? '',
         }),
       );
+
+      print('Add diary response: ${response.statusCode}');
 
       if (response.statusCode == 401) {
         _toast('Session expired. Please login again.', isError: true);
@@ -201,7 +209,6 @@ class _SocialPageState extends State<SocialPage>
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         _toast('Diary entry added');
-        resetDiary();
         fetchAll();
       } else {
         _toast('Failed to add diary entry', isError: true);
@@ -212,16 +219,18 @@ class _SocialPageState extends State<SocialPage>
     }
   }
 
-  Future<void> updateDiary() async {
-    if (selectedDiary == null) return;
-
+  Future<void> updateDiary(String entryId, Map<String, dynamic> updates) async {
     try {
       final headers = await _getHeaders();
-      final response = await http.put(
-        Uri.parse('${ApiService.dairyService}/entry/${selectedDiary!['id']}'),
+
+      // PATCH /diary/:entryId
+      final response = await http.patch(
+        Uri.parse('${EnvConfig.apiBaseUrl}/diary/$entryId'),
         headers: headers,
-        body: jsonEncode(diaryForm),
+        body: jsonEncode(updates),
       );
+
+      print('Update diary response: ${response.statusCode}');
 
       if (response.statusCode == 401) {
         _toast('Session expired. Please login again.', isError: true);
@@ -231,7 +240,6 @@ class _SocialPageState extends State<SocialPage>
 
       if (response.statusCode == 200) {
         _toast('Diary updated');
-        resetDiary();
         fetchAll();
       } else {
         _toast('Failed to update diary', isError: true);
@@ -242,15 +250,17 @@ class _SocialPageState extends State<SocialPage>
     }
   }
 
-  Future<void> deleteDiary() async {
-    if (selectedDiary == null) return;
-
+  Future<void> deleteDiary(String entryId) async {
     try {
       final headers = await _getHeaders();
+
+      // DELETE /diary/:entryId
       final response = await http.delete(
-        Uri.parse('${ApiService.dairyService}/entry/${selectedDiary!['id']}'),
+        Uri.parse('${EnvConfig.apiBaseUrl}/diary/$entryId'),
         headers: headers,
       );
+
+      print('Delete diary response: ${response.statusCode}');
 
       if (response.statusCode == 401) {
         _toast('Session expired. Please login again.', isError: true);
@@ -260,7 +270,6 @@ class _SocialPageState extends State<SocialPage>
 
       if (response.statusCode == 200) {
         _toast('Diary deleted');
-        resetDiary();
         fetchAll();
       } else {
         _toast('Failed to delete diary', isError: true);
@@ -271,59 +280,46 @@ class _SocialPageState extends State<SocialPage>
     }
   }
 
-  Future<void> uploadDiaryPhoto(ImageSource source) async {
-    final picker = ImagePicker();
-    final file = await picker.pickImage(source: source);
-    if (file == null) return;
-
+  Future<void> toggleBookmark(String restaurantId) async {
     try {
-      final headers = await _getHeaders(multipart: true);
+      final headers = await _getHeaders();
 
-      final req = http.MultipartRequest(
-        'POST',
-        Uri.parse('${ApiService.dairyService}/upload-photo'),
+      final isCurrentlyBookmarked = bookmarks.any(
+        (b) =>
+            b['restaurantid']?.toString() == restaurantId ||
+            b['restaurantId']?.toString() == restaurantId,
       );
 
-      req.headers.addAll(headers);
-      req.files.add(await http.MultipartFile.fromPath('file', file.path));
+      http.Response response;
 
-      final res = await req.send();
+      if (isCurrentlyBookmarked) {
+        // DELETE /bookmarks/:restaurantId
+        response = await http.delete(
+          Uri.parse('${EnvConfig.apiBaseUrl}/bookmarks/$restaurantId'),
+          headers: headers,
+        );
+      } else {
+        // POST /bookmarks/:restaurantId
+        response = await http.post(
+          Uri.parse('${EnvConfig.apiBaseUrl}/bookmarks/$restaurantId'),
+          headers: headers,
+        );
+      }
 
-      if (res.statusCode == 401) {
+      if (response.statusCode == 401) {
         _toast('Session expired. Please login again.', isError: true);
         context.go('/auth');
         return;
       }
 
-      if (res.statusCode == 200) {
-        final body = jsonDecode(await res.stream.bytesToString());
-        setState(() {
-          diaryForm['photo'] = body['photo_url'] ?? '';
-        });
-        _toast('Photo uploaded successfully');
-      } else {
-        _toast('Failed to upload photo', isError: true);
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        _toast(isCurrentlyBookmarked ? 'Bookmark removed' : 'Bookmarked!');
+        fetchAll();
       }
     } catch (e) {
-      print('Photo upload error: $e');
-      _toast('Error uploading photo', isError: true);
+      print('Toggle bookmark error: $e');
+      _toast('Error updating bookmark', isError: true);
     }
-  }
-
-  void resetDiary() {
-    setState(() {
-      showAddDiary = false;
-      showEditDiary = false;
-      selectedDiary = null;
-      diaryForm = {
-        'beverage_name': '',
-        'restaurant': '',
-        'rating': 0,
-        'notes': '',
-        'photo': '',
-        'share_to_feed': false,
-      };
-    });
   }
 
   void logout() {
@@ -378,9 +374,7 @@ class _SocialPageState extends State<SocialPage>
               labelColor: AppTheme.primary,
               unselectedLabelColor: AppTheme.textSecondary,
               tabs: const [
-                Tab(text: 'Ratings'),
                 Tab(text: 'Diary'),
-                Tab(text: 'Badges'),
                 Tab(text: 'Saves'),
                 Tab(text: 'Friends'),
               ],
@@ -389,9 +383,7 @@ class _SocialPageState extends State<SocialPage>
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  _ratingsTab(),
                   _diaryTab(),
-                  _badgesTab(),
                   _savesTab(),
                   _friendsTab(),
                 ],
@@ -400,17 +392,103 @@ class _SocialPageState extends State<SocialPage>
           ],
         ),
       ),
-      floatingActionButton: _tabController.index == 1
+      floatingActionButton: _tabController.index == 0
           ? FloatingActionButton(
               backgroundColor: AppTheme.primary,
-              onPressed: () => setState(() => showAddDiary = true),
+              onPressed: _showAddDiaryDialog,
               child: const Icon(Icons.add, color: Colors.black),
             )
           : null,
     );
   }
 
-  // ── Loading, Error, Header, Tabs ─────────────────────────────────────────────
+  void _showAddDiaryDialog() {
+    final nameController = TextEditingController();
+    final restaurantController = TextEditingController();
+    final notesController = TextEditingController();
+    int rating = 3;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: AppTheme.card,
+          title: const Text('Add Diary Entry',
+              style: TextStyle(color: Colors.white)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    labelText: 'Beverage Name',
+                    labelStyle: TextStyle(color: Colors.white70),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: restaurantController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    labelText: 'Restaurant',
+                    labelStyle: TextStyle(color: Colors.white70),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    const Text('Rating: ',
+                        style: TextStyle(color: Colors.white)),
+                    ...List.generate(5, (index) {
+                      return IconButton(
+                        icon: Icon(
+                          index < rating ? Icons.star : Icons.star_border,
+                          color: AppTheme.primary,
+                        ),
+                        onPressed: () {
+                          setDialogState(() => rating = index + 1);
+                        },
+                      );
+                    }),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: notesController,
+                  style: const TextStyle(color: Colors.white),
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Notes (optional)',
+                    labelStyle: TextStyle(color: Colors.white70),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                addDiary(
+                  bevName: nameController.text,
+                  restaurant: restaurantController.text,
+                  rating: rating,
+                  notes: notesController.text,
+                );
+              },
+              child: const Text('Add'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _buildLoadingSkeleton() {
     return Center(
@@ -497,16 +575,16 @@ class _SocialPageState extends State<SocialPage>
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           Text(
-            '@${(widget.user['name'] ?? 'user').toLowerCase().replaceAll(' ', '')}',
+            widget.user['phone'] ?? '',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _stat('Ratings', stats['ratings_count'] ?? 0),
-              _stat('Friends', stats['friends_count'] ?? 0),
-              _stat('Badges', badges.where((b) => b['earned'] == true).length),
+              _stat('Ratings', stats['ratingsCount'] ?? 0),
+              _stat('Friends', stats['friendsCount'] ?? 0),
+              _stat('Saves', stats['bookmarkCount'] ?? 0),
             ],
           ),
           const SizedBox(height: 12),
@@ -539,47 +617,6 @@ class _SocialPageState extends State<SocialPage>
     );
   }
 
-  Widget _ratingsTab() {
-    if (ratings.isEmpty) {
-      return Center(
-        child: Text('No ratings yet',
-            style: Theme.of(context).textTheme.bodySmall),
-      );
-    }
-
-    return ListView.builder(
-      itemCount: ratings.length,
-      itemBuilder: (_, i) {
-        final r = ratings[i];
-        return ListTile(
-          leading: r['beverage']?['image'] != null
-              ? ClipRRect(
-                  borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-                  child: Image.network(
-                    r['beverage']['image'],
-                    width: 50,
-                    height: 50,
-                    fit: BoxFit.cover,
-                  ),
-                )
-              : Icon(Icons.local_bar_rounded, color: AppTheme.textSecondary),
-          title: Text(
-            r['beverage']?['name'] ?? 'Unknown',
-            style: const TextStyle(color: AppTheme.textPrimary),
-          ),
-          subtitle: Text(
-            r['review'] ?? '',
-            style: const TextStyle(color: AppTheme.textSecondary),
-          ),
-          trailing: Text(
-            '${r['rating'] ?? '?'} ⭐',
-            style: const TextStyle(color: AppTheme.primary),
-          ),
-        );
-      },
-    );
-  }
-
   Widget _diaryTab() {
     if (diaryEntries.isEmpty) {
       return Center(
@@ -589,70 +626,74 @@ class _SocialPageState extends State<SocialPage>
     }
 
     return ListView.builder(
+      padding: const EdgeInsets.all(16),
       itemCount: diaryEntries.length,
       itemBuilder: (_, i) {
-        final d = diaryEntries[i];
-        return ListTile(
-          leading: d['photo'] != null && d['photo'].toString().isNotEmpty
-              ? ClipRRect(
-                  borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-                  child: Image.network(
-                    d['photo'],
-                    width: 50,
-                    height: 50,
-                    fit: BoxFit.cover,
+        final entry = diaryEntries[i];
+        final entryId = entry['entryid'] ?? entry['entryId'];
+        final bevName = entry['bevname'] ?? entry['bevName'] ?? 'Unknown';
+        final restaurant = entry['restaurant'] ?? '';
+        final rating = entry['rating'] ?? 0;
+        final notes = entry['notes'] ?? '';
+        final image = entry['image'];
+
+        return Card(
+          color: AppTheme.card,
+          margin: const EdgeInsets.only(bottom: 12),
+          child: ListTile(
+            leading: image != null && image.toString().isNotEmpty
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+                    child: Image.network(
+                      image,
+                      width: 50,
+                      height: 50,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Icon(
+                          Icons.local_bar_rounded,
+                          color: AppTheme.textSecondary),
+                    ),
+                  )
+                : Icon(Icons.local_bar_rounded, color: AppTheme.textSecondary),
+            title: Text(
+              bevName,
+              style: const TextStyle(color: AppTheme.textPrimary),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  restaurant,
+                  style: const TextStyle(color: AppTheme.textSecondary),
+                ),
+                if (notes.isNotEmpty)
+                  Text(
+                    notes,
+                    style: const TextStyle(
+                        color: AppTheme.textTertiary, fontSize: 12),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
-                )
-              : Icon(Icons.local_bar_rounded, color: AppTheme.textSecondary),
-          title: Text(
-            d['beverage_name'] ?? 'Unknown',
-            style: const TextStyle(color: AppTheme.textPrimary),
+              ],
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '$rating',
+                  style: const TextStyle(
+                      color: AppTheme.primary, fontWeight: FontWeight.bold),
+                ),
+                const Icon(Icons.star, color: AppTheme.primary, size: 16),
+                IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                  onPressed: () => deleteDiary(entryId),
+                ),
+              ],
+            ),
           ),
-          subtitle: Text(
-            d['restaurant'] ?? '',
-            style: const TextStyle(color: AppTheme.textSecondary),
-          ),
-          onTap: () {
-            setState(() {
-              selectedDiary = d;
-              diaryForm = Map<String, dynamic>.from(d);
-              showEditDiary = true;
-            });
-          },
         );
       },
-    );
-  }
-
-  Widget _badgesTab() {
-    final filtered = badges.where((b) {
-      if (badgeFilter == 'earned') return b['earned'] == true;
-      if (badgeFilter == 'in_progress') return b['earned'] != true;
-      return true;
-    }).toList();
-
-    return GridView.count(
-      crossAxisCount: 2,
-      padding: const EdgeInsets.all(12),
-      children: filtered.map((b) {
-        return Card(
-          color: b['earned'] == true
-              ? AppTheme.primary.withOpacity(0.3)
-              : AppTheme.card,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(b['icon'] ?? '🏆', style: const TextStyle(fontSize: 32)),
-              const SizedBox(height: 8),
-              Text(
-                b['name'] ?? 'Badge',
-                style: const TextStyle(color: AppTheme.textPrimary),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        );
-      }).toList(),
     );
   }
 
@@ -664,30 +705,44 @@ class _SocialPageState extends State<SocialPage>
       );
     }
 
-    return ListView(
-      children: bookmarks.map((r) {
-        return ListTile(
-          leading: r['image'] != null
-              ? ClipRRect(
-                  borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-                  child: Image.network(
-                    r['image'],
-                    width: 50,
-                    height: 50,
-                    fit: BoxFit.cover,
-                  ),
-                )
-              : Icon(Icons.restaurant_rounded, color: AppTheme.textSecondary),
-          title: Text(
-            r['name'] ?? 'Unknown',
-            style: const TextStyle(color: AppTheme.textPrimary),
-          ),
-          subtitle: Text(
-            r['area'] ?? r['address'] ?? '',
-            style: const TextStyle(color: AppTheme.textSecondary),
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: bookmarks.length,
+      itemBuilder: (_, i) {
+        final bookmark = bookmarks[i];
+        final name = bookmark['name'] ?? 'Restaurant';
+        final address = bookmark['address'] ?? '';
+        final logoImage = bookmark['logoimage'] ?? bookmark['logoImage'];
+
+        return Card(
+          color: AppTheme.card,
+          margin: const EdgeInsets.only(bottom: 12),
+          child: ListTile(
+            leading: logoImage != null && logoImage.toString().isNotEmpty
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+                    child: Image.network(
+                      logoImage,
+                      width: 50,
+                      height: 50,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Icon(
+                          Icons.restaurant_rounded,
+                          color: AppTheme.textSecondary),
+                    ),
+                  )
+                : Icon(Icons.restaurant_rounded, color: AppTheme.textSecondary),
+            title: Text(
+              name,
+              style: const TextStyle(color: AppTheme.textPrimary),
+            ),
+            subtitle: Text(
+              address,
+              style: const TextStyle(color: AppTheme.textSecondary),
+            ),
           ),
         );
-      }).toList(),
+      },
     );
   }
 
@@ -699,26 +754,36 @@ class _SocialPageState extends State<SocialPage>
       );
     }
 
-    return ListView(
-      children: friends.map((f) {
-        return ListTile(
-          leading: CircleAvatar(
-            backgroundColor: AppTheme.secondary,
-            child: Text(
-              f['name']?[0]?.toUpperCase() ?? 'F',
-              style: const TextStyle(color: Colors.white),
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: friends.length,
+      itemBuilder: (_, i) {
+        final friend = friends[i];
+        final name = friend['name'] ?? 'User';
+        final phone = friend['phone'] ?? '';
+
+        return Card(
+          color: AppTheme.card,
+          margin: const EdgeInsets.only(bottom: 12),
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: AppTheme.secondary,
+              child: Text(
+                name[0].toUpperCase(),
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+            title: Text(
+              name,
+              style: const TextStyle(color: AppTheme.textPrimary),
+            ),
+            subtitle: Text(
+              phone,
+              style: const TextStyle(color: AppTheme.textSecondary),
             ),
           ),
-          title: Text(
-            f['name'] ?? 'Unknown',
-            style: const TextStyle(color: AppTheme.textPrimary),
-          ),
-          subtitle: Text(
-            '@${(f['name'] ?? 'unknown').toLowerCase().replaceAll(' ', '')}',
-            style: const TextStyle(color: AppTheme.textSecondary),
-          ),
         );
-      }).toList(),
+      },
     );
   }
 }
