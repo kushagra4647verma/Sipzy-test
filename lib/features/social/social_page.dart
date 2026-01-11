@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -41,7 +42,7 @@ class _SocialPageState extends State<SocialPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this); // Only 3 tabs now
+    _tabController = TabController(length: 3, vsync: this);
     fetchAll();
   }
 
@@ -59,6 +60,7 @@ class _SocialPageState extends State<SocialPage>
 
     if (session?.accessToken != null) {
       headers['Authorization'] = 'Bearer ${session!.accessToken}';
+      print('🔑 FULL TOKEN: ${session.accessToken}');
     }
 
     final effectiveUserId = user?.id ?? widget.user['id']?.toString();
@@ -80,33 +82,45 @@ class _SocialPageState extends State<SocialPage>
 
       print('📡 Fetching social data with headers: ${headers.keys.join(", ")}');
 
-      // Using correct endpoints matching your database schema
+      // Using correct endpoints matching backend routes
       final responses = await Future.wait([
-        // GET /users/me - should return user profile + badge stats
-        http.get(
-          Uri.parse('${EnvConfig.apiBaseUrl}/users/me'),
-          headers: headers,
-        ),
-        // GET /diary
-        http.get(
-          Uri.parse('${EnvConfig.apiBaseUrl}/diary'),
-          headers: headers,
-        ),
-        // GET /users/me/bookmarks
-        http.get(
-          Uri.parse('${EnvConfig.apiBaseUrl}/users/me/bookmarks'),
-          headers: headers,
-        ),
-        // GET /users/me/friends
-        http.get(
-          Uri.parse('${EnvConfig.apiBaseUrl}/users/me/friends'),
-          headers: headers,
-        ),
+        // GET /users/me - user profile + badge stats
+        http
+            .get(
+              Uri.parse('${EnvConfig.apiBaseUrl}/users/me'),
+              headers: headers,
+            )
+            .timeout(const Duration(seconds: 15)),
+
+        // GET /diary - all diary entries for current user
+        http
+            .get(
+              Uri.parse('${EnvConfig.apiBaseUrl}/diary'),
+              headers: headers,
+            )
+            .timeout(const Duration(seconds: 15)),
+
+        // GET /users/me/bookmarks - user bookmarks
+        http
+            .get(
+              Uri.parse('${EnvConfig.apiBaseUrl}/users/me/bookmarks'),
+              headers: headers,
+            )
+            .timeout(const Duration(seconds: 15)),
+
+        // GET /users/me/friends - user friends
+        http
+            .get(
+              Uri.parse('${EnvConfig.apiBaseUrl}/friends'),
+              headers: headers,
+            )
+            .timeout(const Duration(seconds: 15)),
       ]);
 
       // Check for auth error in any response
-      for (final res in responses) {
-        print('Response status: ${res.statusCode}');
+      for (int i = 0; i < responses.length; i++) {
+        final res = responses[i];
+        print('Response ${i} status: ${res.statusCode}');
         if (res.statusCode == 401) {
           if (mounted) {
             _toast('Session expired. Please login again.', isError: true);
@@ -120,13 +134,25 @@ class _SocialPageState extends State<SocialPage>
         setState(() {
           // Parse user/stats data (from badges table)
           final userData = _safeParseJson(responses[0].body, defaultValue: {});
+
+          // Try to extract badge stats
+          final badges = userData['badges'] ?? {};
           stats = {
-            'ratingsCount':
-                userData['ratingscount'] ?? userData['ratingsCount'] ?? 0,
-            'friendsCount':
-                userData['friendscount'] ?? userData['friendsCount'] ?? 0,
-            'bookmarkCount':
-                userData['bookmarkcount'] ?? userData['bookmarkCount'] ?? 0,
+            'ratingsCount': badges['ratingscount'] ??
+                badges['ratingsCount'] ??
+                userData['ratingscount'] ??
+                userData['ratingsCount'] ??
+                0,
+            'friendsCount': badges['friendscount'] ??
+                badges['friendsCount'] ??
+                userData['friendscount'] ??
+                userData['friendsCount'] ??
+                0,
+            'bookmarkCount': badges['bookmarkcount'] ??
+                badges['bookmarkCount'] ??
+                userData['bookmarkcount'] ??
+                userData['bookmarkCount'] ??
+                0,
           };
 
           diaryEntries = _safeParseArray(responses[1].body);
@@ -134,6 +160,12 @@ class _SocialPageState extends State<SocialPage>
           friends = _safeParseArray(responses[3].body);
           hasError = false;
         });
+      }
+    } on TimeoutException {
+      print('❌ Request timeout in fetchAll');
+      if (mounted) {
+        setState(() => hasError = true);
+        _toast('Request timed out. Please try again.', isError: true);
       }
     } catch (e) {
       print('❌ Social fetchAll error: $e');
@@ -152,7 +184,8 @@ class _SocialPageState extends State<SocialPage>
     try {
       final data = jsonDecode(body);
       return data['success'] == true ? (data['data'] ?? defaultValue) : data;
-    } catch (_) {
+    } catch (e) {
+      print('JSON parse error: $e');
       return defaultValue;
     }
   }
@@ -160,10 +193,15 @@ class _SocialPageState extends State<SocialPage>
   List _safeParseArray(String body) {
     try {
       final data = jsonDecode(body);
-      return data['success'] == true
-          ? (data['data'] as List? ?? [])
-          : (data is List ? data : []);
-    } catch (_) {
+      if (data['success'] == true) {
+        return (data['data'] as List? ?? []);
+      } else if (data is List) {
+        return data;
+      } else {
+        return [];
+      }
+    } catch (e) {
+      print('Array parse error: $e');
       return [];
     }
   }
@@ -185,19 +223,20 @@ class _SocialPageState extends State<SocialPage>
     try {
       final headers = await _getHeaders();
 
-      // POST /diary
-      // Schema: entryId, userId, bevName, restaurant, rating, notes, image
-      final response = await http.post(
-        Uri.parse('${EnvConfig.apiBaseUrl}/diary'),
-        headers: headers,
-        body: jsonEncode({
-          'bevName': bevName,
-          'restaurant': restaurant,
-          'rating': rating,
-          'notes': notes ?? '',
-          'image': image ?? '',
-        }),
-      );
+      // POST /diary - backend route
+      final response = await http
+          .post(
+            Uri.parse('${EnvConfig.apiBaseUrl}/diary'),
+            headers: headers,
+            body: jsonEncode({
+              'bevName': bevName,
+              'restaurant': restaurant,
+              'rating': rating,
+              'notes': notes ?? '',
+              'image': image ?? '',
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
 
       print('Add diary response: ${response.statusCode}');
 
@@ -213,6 +252,8 @@ class _SocialPageState extends State<SocialPage>
       } else {
         _toast('Failed to add diary entry', isError: true);
       }
+    } on TimeoutException {
+      _toast('Request timed out', isError: true);
     } catch (e) {
       print('Add diary error: $e');
       _toast('Error adding diary', isError: true);
@@ -224,11 +265,13 @@ class _SocialPageState extends State<SocialPage>
       final headers = await _getHeaders();
 
       // PATCH /diary/:entryId
-      final response = await http.patch(
-        Uri.parse('${EnvConfig.apiBaseUrl}/diary/$entryId'),
-        headers: headers,
-        body: jsonEncode(updates),
-      );
+      final response = await http
+          .patch(
+            Uri.parse('${EnvConfig.apiBaseUrl}/diary/$entryId'),
+            headers: headers,
+            body: jsonEncode(updates),
+          )
+          .timeout(const Duration(seconds: 15));
 
       print('Update diary response: ${response.statusCode}');
 
@@ -244,6 +287,8 @@ class _SocialPageState extends State<SocialPage>
       } else {
         _toast('Failed to update diary', isError: true);
       }
+    } on TimeoutException {
+      _toast('Request timed out', isError: true);
     } catch (e) {
       print('Update diary error: $e');
       _toast('Error updating diary', isError: true);
@@ -255,10 +300,12 @@ class _SocialPageState extends State<SocialPage>
       final headers = await _getHeaders();
 
       // DELETE /diary/:entryId
-      final response = await http.delete(
-        Uri.parse('${EnvConfig.apiBaseUrl}/diary/$entryId'),
-        headers: headers,
-      );
+      final response = await http
+          .delete(
+            Uri.parse('${EnvConfig.apiBaseUrl}/diary/$entryId'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 15));
 
       print('Delete diary response: ${response.statusCode}');
 
@@ -274,6 +321,8 @@ class _SocialPageState extends State<SocialPage>
       } else {
         _toast('Failed to delete diary', isError: true);
       }
+    } on TimeoutException {
+      _toast('Request timed out', isError: true);
     } catch (e) {
       print('Delete diary error: $e');
       _toast('Error deleting diary', isError: true);
@@ -287,23 +336,28 @@ class _SocialPageState extends State<SocialPage>
       final isCurrentlyBookmarked = bookmarks.any(
         (b) =>
             b['restaurantid']?.toString() == restaurantId ||
-            b['restaurantId']?.toString() == restaurantId,
+            b['restaurantId']?.toString() == restaurantId ||
+            b['id']?.toString() == restaurantId,
       );
 
       http.Response response;
 
       if (isCurrentlyBookmarked) {
         // DELETE /bookmarks/:restaurantId
-        response = await http.delete(
-          Uri.parse('${EnvConfig.apiBaseUrl}/bookmarks/$restaurantId'),
-          headers: headers,
-        );
+        response = await http
+            .delete(
+              Uri.parse('${EnvConfig.apiBaseUrl}/bookmarks/$restaurantId'),
+              headers: headers,
+            )
+            .timeout(const Duration(seconds: 15));
       } else {
         // POST /bookmarks/:restaurantId
-        response = await http.post(
-          Uri.parse('${EnvConfig.apiBaseUrl}/bookmarks/$restaurantId'),
-          headers: headers,
-        );
+        response = await http
+            .post(
+              Uri.parse('${EnvConfig.apiBaseUrl}/bookmarks/$restaurantId'),
+              headers: headers,
+            )
+            .timeout(const Duration(seconds: 15));
       }
 
       if (response.statusCode == 401) {
@@ -316,6 +370,8 @@ class _SocialPageState extends State<SocialPage>
         _toast(isCurrentlyBookmarked ? 'Bookmark removed' : 'Bookmarked!');
         fetchAll();
       }
+    } on TimeoutException {
+      _toast('Request timed out', isError: true);
     } catch (e) {
       print('Toggle bookmark error: $e');
       _toast('Error updating bookmark', isError: true);
@@ -339,6 +395,7 @@ class _SocialPageState extends State<SocialPage>
           borderRadius: BorderRadius.circular(AppTheme.radiusMd),
         ),
         margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 3),
       ),
     );
   }

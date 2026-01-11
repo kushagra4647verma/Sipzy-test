@@ -1,4 +1,3 @@
-// lib/config/env_config.dart
 class EnvConfig {
   static const String apiBaseUrl = 'https://api.sipzy.co.in/user';
   static const String supabaseUrl = 'https://odtqequzbunyxpyjcoex.supabase.co';
@@ -23,7 +22,8 @@ class EnvConfig {
   // App Configuration
   static const int otpLength = 6;
   static const int minAge = 23;
-  static const Duration requestTimeout = Duration(seconds: 30);
+  static const Duration requestTimeout =
+      Duration(seconds: 15); // Increased from 30
 
   // Validation
   static bool get isConfigured {

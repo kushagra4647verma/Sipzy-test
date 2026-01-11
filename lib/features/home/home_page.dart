@@ -56,15 +56,18 @@ class _HomePageState extends State<HomePage> {
 
     if (session?.accessToken != null) {
       headers['Authorization'] = 'Bearer ${session!.accessToken}';
+
+      // 🔥 ADD THESE DEBUG LINES:
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      print('🔑 ACCESS TOKEN: ${session.accessToken}');
+      print('👤 USER ID: ${user?.id}');
+      print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     }
 
     if (user?.id != null) {
       headers['x-user-id'] = user!.id;
-    } else if (widget.user['id'] != null) {
-      headers['x-user-id'] = widget.user['id'].toString();
     }
 
-    print('🔑 Request headers: ${headers.keys.join(", ")}');
     return headers;
   }
 

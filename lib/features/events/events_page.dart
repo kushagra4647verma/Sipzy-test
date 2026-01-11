@@ -5,7 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
-
+import 'dart:async';
 import '../../core/theme/app_theme.dart';
 import '../../shared/navigation/bottom_nav.dart';
 import '../../config/env_config.dart';
@@ -50,6 +50,7 @@ class _EventsPageState extends State<EventsPage> {
 
     return headers;
   }
+// Replace the fetchEvents() method (lines 40-98)
 
   Future<void> fetchEvents() async {
     setState(() {
@@ -60,12 +61,17 @@ class _EventsPageState extends State<EventsPage> {
     try {
       final headers = await _getHeaders();
 
-      // GET /events - Backend should query restaurantEvents table
+      // GET /events - Backend endpoint
       final uri = Uri.parse('${EnvConfig.apiBaseUrl}/events');
 
       print('📡 Fetching events from: $uri');
 
-      final res = await http.get(uri, headers: headers);
+      final res = await http.get(uri, headers: headers).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw TimeoutException('Request timed out');
+        },
+      );
 
       print('📡 Response status: ${res.statusCode}');
       print(
@@ -77,12 +83,15 @@ class _EventsPageState extends State<EventsPage> {
         if (mounted) {
           setState(() {
             // Handle both response formats
-            if (data is Map && data.containsKey('success')) {
+            if (data is Map &&
+                data.containsKey('success') &&
+                data['success'] == true) {
               events = (data['data'] as List? ?? []);
             } else if (data is List) {
               events = data;
             } else {
-              events = [];
+              // If it's a map without success flag, try to extract data
+              events = (data['data'] as List? ?? []);
             }
 
             // Apply search filter if needed
@@ -107,6 +116,12 @@ class _EventsPageState extends State<EventsPage> {
         }
       } else {
         throw Exception('Failed to load events: ${res.statusCode}');
+      }
+    } on TimeoutException {
+      print('❌ Request timeout');
+      if (mounted) {
+        setState(() => hasError = true);
+        _toast('Request timed out. Please try again.', isError: true);
       }
     } catch (e) {
       print('❌ Fetch events error: $e');
