@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../config/env_config.dart';
+import '../../shared/navigation/bottom_nav.dart';
 
 class SocialPage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -120,7 +121,7 @@ class _SocialPageState extends State<SocialPage>
       // Check for auth error in any response
       for (int i = 0; i < responses.length; i++) {
         final res = responses[i];
-        print('Response ${i} status: ${res.statusCode}');
+        print('Response $i status: ${res.statusCode}');
         if (res.statusCode == 401) {
           if (mounted) {
             _toast('Session expired. Please login again.', isError: true);
@@ -405,50 +406,59 @@ class _SocialPageState extends State<SocialPage>
     if (loading) {
       return Scaffold(
         backgroundColor: AppTheme.background,
-        body: _buildLoadingSkeleton(),
+        body: SafeArea(
+          child: _buildLoadingSkeleton(),
+        ),
+        bottomNavigationBar: const BottomNav(active: 'social'),
       );
     }
 
     if (hasError) {
       return Scaffold(
         backgroundColor: AppTheme.background,
-        body: _buildErrorState(),
+        body: SafeArea(
+          child: _buildErrorState(),
+        ),
+        bottomNavigationBar: const BottomNav(active: 'social'),
       );
     }
 
     return Scaffold(
       backgroundColor: AppTheme.background,
-      body: RefreshIndicator(
-        onRefresh: fetchAll,
-        color: AppTheme.primary,
-        backgroundColor: AppTheme.card,
-        child: Column(
-          children: [
-            _header(),
-            TabBar(
-              controller: _tabController,
-              indicatorColor: AppTheme.primary,
-              labelColor: AppTheme.primary,
-              unselectedLabelColor: AppTheme.textSecondary,
-              tabs: const [
-                Tab(text: 'Diary'),
-                Tab(text: 'Saves'),
-                Tab(text: 'Friends'),
-              ],
-            ),
-            Expanded(
-              child: TabBarView(
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: fetchAll,
+          color: AppTheme.primary,
+          backgroundColor: AppTheme.card,
+          child: Column(
+            children: [
+              _header(),
+              TabBar(
                 controller: _tabController,
-                children: [
-                  _diaryTab(),
-                  _savesTab(),
-                  _friendsTab(),
+                indicatorColor: AppTheme.primary,
+                labelColor: AppTheme.primary,
+                unselectedLabelColor: AppTheme.textSecondary,
+                tabs: const [
+                  Tab(text: 'Diary'),
+                  Tab(text: 'Saves'),
+                  Tab(text: 'Friends'),
                 ],
               ),
-            ),
-          ],
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _diaryTab(),
+                    _savesTab(),
+                    _friendsTab(),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
+      bottomNavigationBar: const BottomNav(active: 'social'),
       floatingActionButton: _tabController.index == 0
           ? FloatingActionButton(
               backgroundColor: AppTheme.primary,
@@ -555,7 +565,7 @@ class _SocialPageState extends State<SocialPage>
           Shimmer.fromColors(
             baseColor: AppTheme.card,
             highlightColor: AppTheme.glassLight,
-            child: CircleAvatar(
+            child: const CircleAvatar(
               radius: 48,
               backgroundColor: AppTheme.card,
             ),
@@ -585,7 +595,7 @@ class _SocialPageState extends State<SocialPage>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
+            const Icon(
               Icons.cloud_off_rounded,
               size: 64,
               color: AppTheme.textTertiary,
@@ -614,8 +624,13 @@ class _SocialPageState extends State<SocialPage>
   }
 
   Widget _header() {
-    return Padding(
+    return Container(
       padding: const EdgeInsets.all(16),
+      decoration: const BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: AppTheme.border),
+        ),
+      ),
       child: Column(
         children: [
           CircleAvatar(
@@ -646,6 +661,7 @@ class _SocialPageState extends State<SocialPage>
           ),
           const SizedBox(height: 12),
           SizedBox(
+            width: double.infinity,
             height: 44,
             child: ElevatedButton.icon(
               onPressed: logout,
@@ -706,12 +722,13 @@ class _SocialPageState extends State<SocialPage>
                       width: 50,
                       height: 50,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Icon(
+                      errorBuilder: (_, __, ___) => const Icon(
                           Icons.local_bar_rounded,
                           color: AppTheme.textSecondary),
                     ),
                   )
-                : Icon(Icons.local_bar_rounded, color: AppTheme.textSecondary),
+                : const Icon(Icons.local_bar_rounded,
+                    color: AppTheme.textSecondary),
             title: Text(
               bevName,
               style: const TextStyle(color: AppTheme.textPrimary),
@@ -783,12 +800,13 @@ class _SocialPageState extends State<SocialPage>
                       width: 50,
                       height: 50,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Icon(
+                      errorBuilder: (_, __, ___) => const Icon(
                           Icons.restaurant_rounded,
                           color: AppTheme.textSecondary),
                     ),
                   )
-                : Icon(Icons.restaurant_rounded, color: AppTheme.textSecondary),
+                : const Icon(Icons.restaurant_rounded,
+                    color: AppTheme.textSecondary),
             title: Text(
               name,
               style: const TextStyle(color: AppTheme.textPrimary),

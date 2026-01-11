@@ -135,8 +135,8 @@ class _ExpertDashboardState extends State<ExpertDashboard> {
                   Border.all(color: AppColors.secondary.withValues(alpha: 0.4)),
               color: AppColors.secondary.withValues(alpha: 0.15),
             ),
-            child: Row(
-              children: const [
+            child: const Row(
+              children: [
                 Icon(Icons.verified, color: AppColors.secondary, size: 14),
                 SizedBox(width: 6),
                 Text(
@@ -364,8 +364,8 @@ class _ExpertDashboardState extends State<ExpertDashboard> {
         color: AppColors.card,
         borderRadius: BorderRadius.circular(AppRadius.lg),
       ),
-      child: Column(
-        children: const [
+      child: const Column(
+        children: [
           Icon(Icons.verified, color: AppColors.secondary, size: 40),
           SizedBox(height: 8),
           Text(

@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import '../../core/theme/colors.dart';
 import '../../core/theme/radius.dart';
-import '../../services/auth_service.dart'; // Updated import
+import '../../services/auth_service.dart';
 
 enum AuthStep { phone, otp, signup }
 
@@ -27,8 +27,23 @@ class _AuthPageState extends State<AuthPage> {
   bool agreedToTerms = false;
   bool loading = false;
 
-  // NEW: Store dev OTP to display it
+  // Store dev OTP to display it
   String? devOtp;
+
+  // Text controllers for clearing fields
+  final _phoneController = TextEditingController();
+  final _otpController = TextEditingController();
+  final _nameController = TextEditingController();
+  final _ageController = TextEditingController();
+
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    _otpController.dispose();
+    _nameController.dispose();
+    _ageController.dispose();
+    super.dispose();
+  }
 
   void _toast(String msg, {bool error = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -40,22 +55,39 @@ class _AuthPageState extends State<AuthPage> {
   }
 
   Future<void> sendOtp() async {
-    if (phone.length != 10) {
+    // Validate phone number
+    final cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
+
+    if (cleanPhone.isEmpty) {
+      _toast('Please enter a phone number', error: true);
+      return;
+    }
+
+    if (cleanPhone.length != 10) {
       _toast('Please enter a valid 10-digit phone number', error: true);
+      return;
+    }
+
+    // Check if it starts with valid Indian mobile prefix
+    if (!RegExp(r'^[6-9]').hasMatch(cleanPhone)) {
+      _toast('Phone number must start with 6, 7, 8, or 9', error: true);
       return;
     }
 
     setState(() => loading = true);
 
     try {
-      print('📱 Sending OTP to: +91$phone');
-      final result = await _authService.sendOtp(phone);
+      print('📱 Sending OTP to: +91$cleanPhone');
+      final result = await _authService.sendOtp(cleanPhone);
       print('✅ Send OTP Response: $result');
 
       if (result['success']) {
         setState(() {
+          phone = cleanPhone; // Store cleaned phone
           step = AuthStep.otp;
           devOtp = result['dev_otp']; // Store dev OTP if available
+          otp = ''; // Clear OTP value
+          _otpController.clear(); // Clear OTP field for fresh input
         });
 
         if (devOtp != null) {
@@ -75,7 +107,15 @@ class _AuthPageState extends State<AuthPage> {
   }
 
   Future<void> verifyOtp() async {
-    if (otp.length != 6) {
+    // Validate OTP
+    final cleanOtp = otp.replaceAll(RegExp(r'\D'), '');
+
+    if (cleanOtp.isEmpty) {
+      _toast('Please enter the OTP', error: true);
+      return;
+    }
+
+    if (cleanOtp.length != 6) {
       _toast('Please enter the complete 6-digit OTP', error: true);
       return;
     }
@@ -83,13 +123,17 @@ class _AuthPageState extends State<AuthPage> {
     setState(() => loading = true);
 
     try {
-      print('🔐 Verifying OTP: $otp for phone: +91$phone');
-      final result = await _authService.verifyOtp(phone, otp);
+      print('🔐 Verifying OTP: $cleanOtp for phone: +91$phone');
+      final result = await _authService.verifyOtp(phone, cleanOtp);
       print('✅ Verify OTP Response: $result');
 
       if (result['success']) {
         if (result['is_new'] == true) {
-          setState(() => step = AuthStep.signup);
+          setState(() {
+            step = AuthStep.signup;
+            _nameController.clear(); // Clear signup fields
+            _ageController.clear();
+          });
         } else {
           widget.onLogin({
             'user': result['user'],
@@ -109,14 +153,38 @@ class _AuthPageState extends State<AuthPage> {
   }
 
   Future<void> signup() async {
-    if (name.isEmpty || age.isEmpty) {
-      _toast('Please fill in all fields', error: true);
+    // Validate all fields
+    final trimmedName = name.trim();
+    final trimmedAge = age.trim();
+
+    if (trimmedName.isEmpty) {
+      _toast('Please enter your full name', error: true);
       return;
     }
 
-    final ageInt = int.tryParse(age);
-    if (ageInt == null || ageInt < 23) {
+    if (trimmedName.length < 2) {
+      _toast('Name must be at least 2 characters', error: true);
+      return;
+    }
+
+    if (trimmedAge.isEmpty) {
+      _toast('Please enter your age', error: true);
+      return;
+    }
+
+    final ageInt = int.tryParse(trimmedAge);
+    if (ageInt == null) {
+      _toast('Please enter a valid age', error: true);
+      return;
+    }
+
+    if (ageInt < 23) {
       _toast('You must be 23 years or older to use SipZy', error: true);
+      return;
+    }
+
+    if (ageInt > 120) {
+      _toast('Please enter a valid age', error: true);
       return;
     }
 
@@ -128,9 +196,9 @@ class _AuthPageState extends State<AuthPage> {
     setState(() => loading = true);
 
     try {
-      print('👤 Signing up: $name, age: $ageInt, phone: +91$phone');
+      print('👤 Signing up: $trimmedName, age: $ageInt, phone: +91$phone');
       final result = await _authService.signUp(
-        name: name,
+        name: trimmedName,
         age: ageInt,
         phone: phone,
       );
@@ -197,6 +265,7 @@ class _AuthPageState extends State<AuthPage> {
         const Text('Enter your phone number to get started'),
         const SizedBox(height: 24),
         TextField(
+          controller: _phoneController,
           keyboardType: TextInputType.phone,
           maxLength: 10,
           onChanged: (v) => phone = v.replaceAll(RegExp(r'\D'), ''),
@@ -204,6 +273,7 @@ class _AuthPageState extends State<AuthPage> {
             labelText: 'Phone Number',
             prefixText: '+91 ',
             counterText: '',
+            helperText: 'Enter 10-digit mobile number',
           ),
         ),
         const SizedBox(height: 24),
@@ -229,7 +299,7 @@ class _AuthPageState extends State<AuthPage> {
         const SizedBox(height: 8),
         Text('Enter the 6-digit code sent to +91 $phone'),
 
-        // NEW: Show dev OTP prominently
+        // Show dev OTP prominently
         if (devOtp != null) ...[
           const SizedBox(height: 12),
           Container(
@@ -276,12 +346,17 @@ class _AuthPageState extends State<AuthPage> {
 
         const SizedBox(height: 24),
         TextField(
+          controller: _otpController,
           keyboardType: TextInputType.number,
           maxLength: 6,
-          onChanged: (v) => otp = v,
+          autofocus: true,
+          onChanged: (v) {
+            otp = v.replaceAll(RegExp(r'\D'), '');
+          },
           decoration: const InputDecoration(
             labelText: 'OTP',
             counterText: '',
+            helperText: 'Enter the 6-digit code',
           ),
         ),
         const SizedBox(height: 16),
@@ -298,9 +373,14 @@ class _AuthPageState extends State<AuthPage> {
               step = AuthStep.phone;
               otp = '';
               devOtp = null;
+              _otpController.clear();
             });
           },
           child: const Text('Change Phone Number'),
+        ),
+        TextButton(
+          onPressed: loading ? null : sendOtp,
+          child: const Text('Resend OTP'),
         ),
       ],
     );
@@ -316,13 +396,23 @@ class _AuthPageState extends State<AuthPage> {
         ),
         const SizedBox(height: 16),
         TextField(
-          decoration: const InputDecoration(labelText: 'Full Name'),
+          controller: _nameController,
+          decoration: const InputDecoration(
+            labelText: 'Full Name',
+            helperText: 'Enter your full name',
+          ),
           onChanged: (v) => name = v,
+          textCapitalization: TextCapitalization.words,
         ),
         const SizedBox(height: 12),
         TextField(
-          decoration: const InputDecoration(labelText: 'Age (23+)'),
+          controller: _ageController,
+          decoration: const InputDecoration(
+            labelText: 'Age (23+)',
+            helperText: 'You must be 23 or older',
+          ),
           keyboardType: TextInputType.number,
+          maxLength: 3,
           onChanged: (v) => age = v,
         ),
         const SizedBox(height: 12),

@@ -287,7 +287,7 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
+            const Icon(
               Icons.cloud_off_rounded,
               size: 64,
               color: AppTheme.textTertiary,
@@ -324,7 +324,7 @@ class _HomePageState extends State<HomePage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
+              const Icon(
                 Icons.restaurant_rounded,
                 size: 64,
                 color: AppTheme.textTertiary,
@@ -372,7 +372,7 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         border: Border(
           bottom: BorderSide(color: AppTheme.border),
         ),
@@ -382,7 +382,8 @@ class _Header extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.local_bar_rounded, color: AppTheme.primary, size: 28),
+              const Icon(Icons.local_bar_rounded,
+                  color: AppTheme.primary, size: 28),
               const SizedBox(width: 8),
               Expanded(
                 child: Column(
@@ -407,8 +408,9 @@ class _Header extends StatelessWidget {
             style: const TextStyle(color: AppTheme.textPrimary),
             decoration: InputDecoration(
               hintText: 'Search restaurants...',
-              hintStyle: TextStyle(color: AppTheme.textTertiary),
-              prefixIcon: Icon(Icons.search, color: AppTheme.textSecondary),
+              hintStyle: const TextStyle(color: AppTheme.textTertiary),
+              prefixIcon:
+                  const Icon(Icons.search, color: AppTheme.textSecondary),
               filled: true,
               fillColor: AppTheme.glassLight,
               border: OutlineInputBorder(
@@ -452,7 +454,7 @@ class _RestaurantCard extends StatelessWidget {
             Stack(
               children: [
                 ClipRRect(
-                  borderRadius: BorderRadius.vertical(
+                  borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(AppTheme.radiusLg),
                   ),
                   child: Image.network(
@@ -464,7 +466,7 @@ class _RestaurantCard extends StatelessWidget {
                       return Container(
                         height: 120,
                         color: AppTheme.glassLight,
-                        child: Icon(
+                        child: const Icon(
                           Icons.restaurant_rounded,
                           size: 40,
                           color: AppTheme.textTertiary,
@@ -484,7 +486,7 @@ class _RestaurantCard extends StatelessWidget {
                         minHeight: 44,
                       ),
                       padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
+                      decoration: const BoxDecoration(
                         color: Colors.black54,
                         shape: BoxShape.circle,
                       ),

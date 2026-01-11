@@ -56,7 +56,6 @@ class AppTheme {
         primary: primary,
         secondary: secondary,
         surface: card,
-        background: background,
         onPrimary: Colors.black,
         onSecondary: Colors.white,
       ),
@@ -141,7 +140,7 @@ class AppTheme {
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radiusLg),
-          side: BorderSide(color: border),
+          side: const BorderSide(color: border),
         ),
       ),
 
@@ -151,11 +150,11 @@ class AppTheme {
         fillColor: glassLight,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMd),
-          borderSide: BorderSide(color: border),
+          borderSide: const BorderSide(color: border),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMd),
-          borderSide: BorderSide(color: border),
+          borderSide: const BorderSide(color: border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMd),
@@ -191,7 +190,7 @@ class AppTheme {
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: textPrimary,
-          side: BorderSide(color: border),
+          side: const BorderSide(color: border),
           padding: const EdgeInsets.symmetric(
             horizontal: spacing24,
             vertical: spacing12,
@@ -209,7 +208,7 @@ class AppTheme {
       ),
 
       // Divider theme
-      dividerTheme: DividerThemeData(
+      dividerTheme: const DividerThemeData(
         color: border,
         thickness: 1,
         space: spacing16,

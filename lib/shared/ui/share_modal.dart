@@ -158,8 +158,8 @@ class ShareModal extends StatelessWidget {
   // ---------------- UI ----------------
 
   Widget _header() {
-    return Row(
-      children: const [
+    return const Row(
+      children: [
         Icon(Icons.share, color: Colors.amber, size: 22),
         SizedBox(width: 8),
         Text(

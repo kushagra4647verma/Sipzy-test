@@ -222,7 +222,7 @@ class _EventsPageState extends State<EventsPage> {
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: AppTheme.border)),
       ),
       child: Column(
@@ -233,12 +233,12 @@ class _EventsPageState extends State<EventsPage> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
+                  gradient: const LinearGradient(
                     colors: [AppTheme.secondary, AppTheme.secondaryLight],
                   ),
                   borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                 ),
-                child: Icon(
+                child: const Icon(
                   Icons.calendar_month_rounded,
                   color: Colors.white,
                   size: 24,
@@ -269,8 +269,9 @@ class _EventsPageState extends State<EventsPage> {
             style: const TextStyle(color: AppTheme.textPrimary),
             decoration: InputDecoration(
               hintText: 'Search events...',
-              hintStyle: TextStyle(color: AppTheme.textTertiary),
-              prefixIcon: Icon(Icons.search, color: AppTheme.textSecondary),
+              hintStyle: const TextStyle(color: AppTheme.textTertiary),
+              prefixIcon:
+                  const Icon(Icons.search, color: AppTheme.textSecondary),
               filled: true,
               fillColor: AppTheme.glassLight,
               border: OutlineInputBorder(
@@ -327,7 +328,7 @@ class _EventsPageState extends State<EventsPage> {
           // Event Photo
           if (photo != null && photo.toString().isNotEmpty)
             ClipRRect(
-              borderRadius: BorderRadius.vertical(
+              borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(AppTheme.radiusLg),
               ),
               child: Image.network(
@@ -379,7 +380,7 @@ class _EventsPageState extends State<EventsPage> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
+                      const Icon(
                         Icons.calendar_today_rounded,
                         size: 14,
                         color: AppTheme.textTertiary,
@@ -401,9 +402,9 @@ class _EventsPageState extends State<EventsPage> {
                   height: 48,
                   child: AppTheme.gradientButtonPurple(
                     onPressed: () => bookNow(event),
-                    child: Row(
+                    child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
+                      children: [
                         Icon(Icons.calendar_month_rounded, size: 18),
                         SizedBox(width: 8),
                         Text(
@@ -428,13 +429,13 @@ class _EventsPageState extends State<EventsPage> {
   Widget _buildPlaceholderImage() {
     return Container(
       height: 200,
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: AppTheme.glassLight,
         borderRadius: BorderRadius.vertical(
           top: Radius.circular(AppTheme.radiusLg),
         ),
       ),
-      child: Column(
+      child: const Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
@@ -442,7 +443,7 @@ class _EventsPageState extends State<EventsPage> {
             size: 48,
             color: AppTheme.textTertiary,
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           Text(
             'No image available',
             style: TextStyle(
@@ -495,7 +496,7 @@ class _EventsPageState extends State<EventsPage> {
                   ],
                 ),
               ),
-              child: Icon(
+              child: const Icon(
                 Icons.cloud_off_rounded,
                 size: 64,
                 color: AppTheme.textTertiary,
@@ -518,9 +519,9 @@ class _EventsPageState extends State<EventsPage> {
             const SizedBox(height: 32),
             AppTheme.gradientButtonPurple(
               onPressed: fetchEvents,
-              child: Row(
+              child: const Row(
                 mainAxisSize: MainAxisSize.min,
-                children: const [
+                children: [
                   Icon(Icons.refresh_rounded, size: 20),
                   SizedBox(width: 8),
                   Text('Retry'),
@@ -553,7 +554,7 @@ class _EventsPageState extends State<EventsPage> {
                     ],
                   ),
                 ),
-                child: Icon(
+                child: const Icon(
                   Icons.event_busy_rounded,
                   size: 64,
                   color: AppTheme.textTertiary,

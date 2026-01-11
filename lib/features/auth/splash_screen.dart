@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:math' as math;
 import '../../core/theme/app_theme.dart';
 
 /// Modern Animated Splash Screen

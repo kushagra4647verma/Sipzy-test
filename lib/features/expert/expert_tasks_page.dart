@@ -110,8 +110,8 @@ class _ExpertTasksPageState extends State<ExpertTasksPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: const [
+        const Row(
+          children: [
             Icon(Icons.assignment, color: AppColors.secondary, size: 28),
             SizedBox(width: 8),
             Text(
@@ -265,8 +265,8 @@ class _ExpertTasksPageState extends State<ExpertTasksPage> {
                     color: AppColors.secondary,
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: Row(
-                    children: const [
+                  child: const Row(
+                    children: [
                       Icon(Icons.star, color: Colors.white, size: 14),
                       SizedBox(width: 4),
                       Text(

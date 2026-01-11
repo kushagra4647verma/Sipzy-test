@@ -114,8 +114,8 @@ class _InviteFriendsModalState extends State<InviteFriendsModal> {
   // ---------------- UI ----------------
 
   Widget _header() {
-    return Row(
-      children: const [
+    return const Row(
+      children: [
         Icon(Icons.people, color: Colors.purple, size: 22),
         SizedBox(width: 8),
         Text(
@@ -150,10 +150,10 @@ class _InviteFriendsModalState extends State<InviteFriendsModal> {
 
   Widget _friendsList() {
     if (filteredFriends.isEmpty) {
-      return Center(
+      return const Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          children: const [
+          children: [
             Icon(Icons.people_outline, size: 48, color: Colors.white24),
             SizedBox(height: 8),
             Text('No friends found', style: TextStyle(color: Colors.white60)),
