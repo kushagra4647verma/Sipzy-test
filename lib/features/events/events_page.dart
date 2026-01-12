@@ -6,6 +6,7 @@ import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:async';
+
 import '../../core/theme/app_theme.dart';
 import '../../shared/navigation/bottom_nav.dart';
 import '../../config/env_config.dart';
@@ -50,7 +51,6 @@ class _EventsPageState extends State<EventsPage> {
 
     return headers;
   }
-// Replace the fetchEvents() method (lines 40-98)
 
   Future<void> fetchEvents() async {
     setState(() {
@@ -60,8 +60,6 @@ class _EventsPageState extends State<EventsPage> {
 
     try {
       final headers = await _getHeaders();
-
-      // GET /events - Backend endpoint
       final uri = Uri.parse('${EnvConfig.apiBaseUrl}/events');
 
       print('📡 Fetching events from: $uri');
@@ -74,15 +72,12 @@ class _EventsPageState extends State<EventsPage> {
       );
 
       print('📡 Response status: ${res.statusCode}');
-      print(
-          '📡 Response body preview: ${res.body.substring(0, res.body.length > 200 ? 200 : res.body.length)}...');
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
 
         if (mounted) {
           setState(() {
-            // Handle both response formats
             if (data is Map &&
                 data.containsKey('success') &&
                 data['success'] == true) {
@@ -90,7 +85,6 @@ class _EventsPageState extends State<EventsPage> {
             } else if (data is List) {
               events = data;
             } else {
-              // If it's a map without success flag, try to extract data
               events = (data['data'] as List? ?? []);
             }
 
@@ -137,7 +131,6 @@ class _EventsPageState extends State<EventsPage> {
   }
 
   void bookNow(Map event) async {
-    // Use bookingLink if available, otherwise fallback to phone
     final bookingLink = event['bookinglink'] ?? event['bookingLink'];
 
     if (bookingLink != null && bookingLink.toString().isNotEmpty) {
@@ -181,9 +174,6 @@ class _EventsPageState extends State<EventsPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Note: featured/trending flags don't exist in schema
-    // Backend should handle this logic or we show all events equally
-
     return Scaffold(
       backgroundColor: AppTheme.background,
       body: SafeArea(
@@ -290,9 +280,6 @@ class _EventsPageState extends State<EventsPage> {
   }
 
   Widget _buildEventCard(Map event) {
-    // Schema fields: id, restaurantid, name, photo, eventDate, eventTime,
-    // bookingLink, description, createdat, updatedat
-
     final eventDate = event['eventdate'] ?? event['eventDate'];
     final eventTime = event['eventtime'] ?? event['eventTime'];
     final photo = event['photo'];
@@ -302,9 +289,17 @@ class _EventsPageState extends State<EventsPage> {
     // Format date and time
     String dateTimeStr = 'Date TBA';
     if (eventDate != null) {
-      dateTimeStr = eventDate.toString().split('T')[0]; // Basic date formatting
-      if (eventTime != null) {
-        dateTimeStr += ' at $eventTime';
+      try {
+        final date = DateTime.parse(eventDate.toString());
+        dateTimeStr = '${date.day}/${date.month}/${date.year}';
+        if (eventTime != null) {
+          dateTimeStr += ' at $eventTime';
+        }
+      } catch (e) {
+        dateTimeStr = eventDate.toString().split('T')[0];
+        if (eventTime != null) {
+          dateTimeStr += ' at $eventTime';
+        }
       }
     }
 
@@ -405,13 +400,15 @@ class _EventsPageState extends State<EventsPage> {
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.calendar_month_rounded, size: 18),
+                        Icon(Icons.calendar_month_rounded,
+                            size: 18, color: Colors.white),
                         SizedBox(width: 8),
                         Text(
                           'Book Event',
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
+                            color: Colors.white,
                           ),
                         ),
                       ],
@@ -522,9 +519,9 @@ class _EventsPageState extends State<EventsPage> {
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.refresh_rounded, size: 20),
+                  Icon(Icons.refresh_rounded, size: 20, color: Colors.white),
                   SizedBox(width: 8),
-                  Text('Retry'),
+                  Text('Retry', style: TextStyle(color: Colors.white)),
                 ],
               ),
             ),
@@ -586,9 +583,10 @@ class _EventsPageState extends State<EventsPage> {
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.clear_rounded, size: 20),
+                      Icon(Icons.clear_rounded, size: 20, color: Colors.white),
                       SizedBox(width: 8),
-                      Text('Clear Search'),
+                      Text('Clear Search',
+                          style: TextStyle(color: Colors.white)),
                     ],
                   ),
                 ),

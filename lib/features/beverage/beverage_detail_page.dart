@@ -1,12 +1,10 @@
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:image_picker/image_picker.dart';
-
-import '../../core/theme/colors.dart';
-import '../../core/theme/radius.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../core/theme/app_theme.dart';
 import '../../config/env_config.dart';
 
 class BeverageDetailPage extends StatefulWidget {
@@ -24,10 +22,11 @@ class BeverageDetailPage extends StatefulWidget {
 }
 
 class _BeverageDetailPageState extends State<BeverageDetailPage> {
-  static const api = EnvConfig.apiBaseUrl;
+  final _supabase = Supabase.instance.client;
 
   Map<String, dynamic>? beverage;
   bool loading = true;
+  bool hasError = false;
 
   bool showRatingDialog = false;
   bool showReviewsDialog = false;
@@ -37,41 +36,104 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
   String review = '';
   bool submitting = false;
 
-  Map<String, dynamic>? shareItem;
-
   @override
   void initState() {
     super.initState();
     fetchBeverage();
   }
 
+  Future<Map<String, String>> _getHeaders() async {
+    final session = _supabase.auth.currentSession;
+    final user = _supabase.auth.currentUser;
+
+    final headers = {'Content-Type': 'application/json'};
+
+    if (session?.accessToken != null) {
+      headers['Authorization'] = 'Bearer ${session!.accessToken}';
+    }
+
+    if (user?.id != null) {
+      headers['x-user-id'] = user!.id;
+    } else if (widget.user['id'] != null) {
+      headers['x-user-id'] = widget.user['id'].toString();
+    }
+
+    return headers;
+  }
+
   Future<void> fetchBeverage() async {
-    setState(() => loading = true);
+    setState(() {
+      loading = true;
+      hasError = false;
+    });
 
     try {
-      final res = await http.get(
-        Uri.parse('$api/beverages/${widget.beverageId}'),
-      );
-      setState(() => beverage = jsonDecode(res.body));
-    } catch (_) {
-      _toast('Failed to load beverage details');
+      final headers = await _getHeaders();
+      final uri =
+          Uri.parse('${EnvConfig.apiBaseUrl}/beverages/${widget.beverageId}');
+
+      print('📡 Fetching beverage from: $uri');
+
+      final response = await http.get(uri, headers: headers).timeout(
+            const Duration(seconds: 15),
+          );
+
+      print('📡 Response status: ${response.statusCode}');
+      print('📡 Response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        if (mounted) {
+          setState(() {
+            // Handle both response formats
+            if (data is Map &&
+                data.containsKey('success') &&
+                data['success'] == true) {
+              beverage = data['data'] as Map<String, dynamic>?;
+            } else if (data is Map) {
+              beverage = data.cast<String, dynamic>();
+            }
+
+            hasError = false;
+          });
+        }
+      } else if (response.statusCode == 401) {
+        if (mounted) {
+          _toast('Session expired. Please login again.', isError: true);
+          context.go('/auth');
+        }
+      } else {
+        throw Exception('Failed to load beverage: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ Fetch beverage error: $e');
+      if (mounted) {
+        setState(() => hasError = true);
+        _toast('Failed to load beverage details', isError: true);
+      }
     } finally {
-      setState(() => loading = false);
+      if (mounted) {
+        setState(() => loading = false);
+      }
     }
   }
 
   Future<void> submitRating() async {
     if (rating == 0) {
-      _toast('Please select a rating');
+      _toast('Please select a rating', isError: true);
       return;
     }
 
     setState(() => submitting = true);
 
     try {
+      final headers = await _getHeaders();
+
       await http.post(
-        Uri.parse('$api/beverages/${widget.beverageId}/rate'),
-        headers: {'Content-Type': 'application/json'},
+        Uri.parse(
+            '${EnvConfig.apiBaseUrl}/beverages/${widget.beverageId}/rate'),
+        headers: headers,
         body: jsonEncode({
           'user_id': widget.user['id'],
           'rating': rating,
@@ -87,77 +149,133 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
       });
 
       fetchBeverage();
-    } catch (_) {
-      _toast('Failed to submit rating');
+    } catch (e) {
+      print('❌ Submit rating error: $e');
+      _toast('Failed to submit rating', isError: true);
     } finally {
       setState(() => submitting = false);
     }
   }
 
-  Future<void> uploadPhoto() async {
-    final picker = ImagePicker();
-    final image = await picker.pickImage(source: ImageSource.camera);
+  void _toast(String msg, {bool isError = false}) {
+    if (!mounted) return;
 
-    if (image == null) return;
-
-    final request = http.MultipartRequest(
-      'POST',
-      Uri.parse('$api/beverages/${widget.beverageId}/upload-photo'),
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: isError ? Colors.red.shade600 : AppTheme.card,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        ),
+        margin: const EdgeInsets.all(16),
+      ),
     );
-
-    request.files.add(await http.MultipartFile.fromPath('file', image.path));
-    final response = await request.send();
-
-    if (response.statusCode == 200) {
-      _toast('Photo uploaded!');
-      fetchBeverage();
-    } else {
-      _toast('Failed to upload photo');
-    }
-  }
-
-  void _toast(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
   Widget build(BuildContext context) {
     if (loading) {
-      return const Scaffold(
-        backgroundColor: AppColors.background,
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        backgroundColor: AppTheme.background,
+        body: const Center(
+          child: CircularProgressIndicator(color: AppTheme.primary),
+        ),
       );
     }
 
-    if (beverage == null) return const SizedBox.shrink();
+    if (hasError || beverage == null) {
+      return Scaffold(
+        backgroundColor: AppTheme.background,
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.cloud_off_rounded,
+                    size: 64,
+                    color: AppTheme.textTertiary,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Failed to load beverage',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Please try again',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 24),
+                  AppTheme.gradientButtonAmber(
+                    onPressed: fetchBeverage,
+                    child: const Text('Retry'),
+                  ),
+                  const SizedBox(height: 12),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text(
+                      'Go Back',
+                      style: TextStyle(color: AppTheme.textSecondary),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Extract ratings
+    final ratings = beverage!['ratings'] as Map<String, dynamic>? ?? {};
+    final avgHuman = ratings['avgHuman'] ?? ratings['avghuman'] ?? 0;
+    final countHuman = ratings['countHuman'] ?? ratings['counthuman'] ?? 0;
+    final avgExpert = ratings['avgExpert'] ?? ratings['avgexpert'] ?? 0;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppTheme.background,
       body: ListView(
-        padding: const EdgeInsets.only(bottom: 24),
+        padding: EdgeInsets.zero,
         children: [
-          _header(),
-          _ratingsSection(),
-          _detailsSection(),
-          if (beverage!['restaurant'] != null) _restaurantCard(),
-          _actions(),
-          if ((beverage!['reviews'] ?? []).isNotEmpty) _reviewsPreview(),
+          _buildHeader(),
+          const SizedBox(height: 16),
+          _buildRatingsSection(avgHuman, countHuman, avgExpert),
+          const SizedBox(height: 16),
+          _buildDetailsSection(),
+          const SizedBox(height: 16),
+          _buildActionsSection(),
+          const SizedBox(height: 80),
         ],
       ),
     );
   }
 
-  // ---------------- Header ----------------
+  Widget _buildHeader() {
+    final photo = beverage!['photo'];
+    final name = beverage!['name'] ?? 'Beverage';
+    final category =
+        beverage!['category'] ?? beverage!['drinkType'] ?? 'Beverage';
 
-  Widget _header() {
     return Stack(
       children: [
-        Image.network(
-          beverage!['image'],
-          height: 360,
-          width: double.infinity,
-          fit: BoxFit.cover,
-        ),
+        // Image
+        if (photo != null && photo.toString().isNotEmpty)
+          Image.network(
+            photo,
+            height: 360,
+            width: double.infinity,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) =>
+                _buildPlaceholderImage(),
+          )
+        else
+          _buildPlaceholderImage(),
+
+        // Gradient overlay
         Container(
           height: 360,
           decoration: const BoxDecoration(
@@ -168,11 +286,18 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
             ),
           ),
         ),
+
+        // Back button
         Positioned(
           top: 40,
           left: 16,
-          child: _circleBtn(Icons.arrow_back, () => Navigator.pop(context)),
+          child: _buildCircleButton(
+            Icons.arrow_back_rounded,
+            () => Navigator.pop(context),
+          ),
         ),
+
+        // Beverage info
         Positioned(
           bottom: 24,
           left: 16,
@@ -181,7 +306,7 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                beverage!['name'],
+                name,
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 28,
@@ -195,11 +320,11 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
                   vertical: 6,
                 ),
                 decoration: BoxDecoration(
-                  color: AppColors.card,
+                  color: AppTheme.card,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  beverage!['type'],
+                  category,
                   style: const TextStyle(color: Colors.white70),
                 ),
               ),
@@ -210,38 +335,69 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
     );
   }
 
-  Widget _circleBtn(IconData icon, VoidCallback onTap) {
+  Widget _buildPlaceholderImage() {
+    return Container(
+      height: 360,
+      color: AppTheme.glassLight,
+      child: const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.local_bar_rounded,
+            size: 64,
+            color: AppTheme.textTertiary,
+          ),
+          SizedBox(height: 8),
+          Text(
+            'No image available',
+            style: TextStyle(
+              color: AppTheme.textTertiary,
+              fontSize: 12,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCircleButton(IconData icon, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
-      child: CircleAvatar(
-        backgroundColor: Colors.black54,
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: Colors.black54,
+          shape: BoxShape.circle,
+        ),
         child: Icon(icon, color: Colors.white),
       ),
     );
   }
 
-  // ---------------- Ratings ----------------
-
-  Widget _ratingsSection() {
+  Widget _buildRatingsSection(
+      dynamic avgHuman, dynamic countHuman, dynamic avgExpert) {
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
         children: [
-          _ratingCard(
+          _buildRatingCard(
             label: 'SipZy Rating',
-            value: beverage!['sipzy_rating'] ?? 0,
-            color: AppColors.primary,
+            value: 0.0, // Not in API response
+            color: AppTheme.primary,
           ),
-          _ratingCard(
+          const SizedBox(height: 12),
+          _buildRatingCard(
             label: 'Customer Rating',
-            value: beverage!['customer_rating'] ?? 0,
-            color: Colors.purple,
-            subtitle: '${beverage!['customer_rating_count'] ?? 0} reviews',
+            value: avgHuman,
+            color: AppTheme.secondary,
+            subtitle: '$countHuman reviews',
             onTap: () => setState(() => showReviewsDialog = true),
           ),
-          _ratingCard(
+          const SizedBox(height: 12),
+          _buildRatingCard(
             label: 'Expert Rating',
-            value: beverage!['expert_rating'] ?? 0,
+            value: avgExpert,
             color: Colors.green,
             onTap: () => setState(() => showExpertBreakdown = true),
           ),
@@ -250,21 +406,23 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
     );
   }
 
-  Widget _ratingCard({
+  Widget _buildRatingCard({
     required String label,
     required dynamic value,
     required Color color,
     String? subtitle,
     VoidCallback? onTap,
   }) {
+    final ratingValue = (value is num ? value.toDouble() : 0.0);
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.card,
-          borderRadius: BorderRadius.circular(AppRadius.lg),
+          color: AppTheme.card,
+          borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+          border: Border.all(color: AppTheme.border),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -272,20 +430,26 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: const TextStyle(color: Colors.white60)),
+                Text(
+                  label,
+                  style: const TextStyle(color: AppTheme.textSecondary),
+                ),
                 if (subtitle != null)
                   Text(
                     subtitle,
-                    style: const TextStyle(color: Colors.white38, fontSize: 12),
+                    style: const TextStyle(
+                      color: AppTheme.textTertiary,
+                      fontSize: 12,
+                    ),
                   ),
               ],
             ),
             Row(
               children: [
-                Icon(Icons.star, color: color),
+                Icon(Icons.star_rounded, color: color, size: 24),
                 const SizedBox(width: 6),
                 Text(
-                  value.toString(),
+                  ratingValue.toStringAsFixed(1),
                   style: TextStyle(
                     color: color,
                     fontSize: 22,
@@ -300,41 +464,62 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
     );
   }
 
-  // ---------------- Details ----------------
+  Widget _buildDetailsSection() {
+    final description = beverage!['description'] ?? '';
+    final price = beverage!['price'] ?? 0;
+    final baseType = beverage!['baseType'] ?? beverage!['basetype'] ?? 'N/A';
+    final category = beverage!['category'] ?? 'N/A';
 
-  Widget _detailsSection() {
-    return _card(
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Details',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          _detailRow('Description', beverage!['description']),
-          _detailRow('Price', '₹${beverage!['price']}'),
-          _detailRow('Base Drink', beverage!['base_drink']),
-          _detailRow(
-            'Type',
-            beverage!['alcoholic'] ? 'Alcoholic' : 'Non-Alcoholic',
-          ),
-        ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.card,
+          borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+          border: Border.all(color: AppTheme.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Details',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (description.isNotEmpty)
+              _buildDetailRow('Description', description),
+            _buildDetailRow('Price', '₹$price'),
+            _buildDetailRow('Base Drink', baseType),
+            _buildDetailRow('Category', category),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _detailRow(String label, String value) {
+  Widget _buildDetailRow(String label, String value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(color: Colors.white60)),
-          Flexible(
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: const TextStyle(color: AppTheme.textSecondary),
+            ),
+          ),
+          Expanded(
+            flex: 3,
             child: Text(
               value,
-              style: const TextStyle(color: Colors.white70),
+              style: const TextStyle(color: AppTheme.textPrimary),
               textAlign: TextAlign.right,
             ),
           ),
@@ -343,137 +528,31 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
     );
   }
 
-  // ---------------- Restaurant ----------------
-
-  Widget _restaurantCard() {
-    final r = beverage!['restaurant'];
-
-    return GestureDetector(
-      onTap: () => context.go('/restaurant/${r['id']}'),
-      child: _card(
-        Row(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.network(
-                r['image'],
-                width: 64,
-                height: 64,
-                fit: BoxFit.cover,
+  Widget _buildActionsSection() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: SizedBox(
+        width: double.infinity,
+        height: 48,
+        child: AppTheme.gradientButtonAmber(
+          onPressed: () => setState(() => showRatingDialog = true),
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.star_rounded, size: 20, color: Colors.black),
+              SizedBox(width: 8),
+              Text(
+                'Add Rating',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black,
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(r['name'], style: const TextStyle(color: Colors.white)),
-                Text(r['area'], style: const TextStyle(color: Colors.white60)),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    );
-  }
-
-  // ---------------- Actions ----------------
-
-  Widget _actions() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: () => setState(() => showRatingDialog = true),
-              icon: const Icon(Icons.star),
-              label: const Text('Add Rating'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          IconButton(
-            onPressed: uploadPhoto,
-            icon: const Icon(Icons.camera_alt, color: Colors.white),
-          ),
-          IconButton(
-            onPressed: () {
-              setState(() {
-                shareItem = {
-                  'title': beverage!['name'],
-                  'description':
-                      '${beverage!['type']} • ₹${beverage!['price']}',
-                };
-              });
-            },
-            icon: const Icon(Icons.share, color: Colors.white),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------------- Reviews ----------------
-
-  Widget _reviewsPreview() {
-    final reviews = beverage!['reviews'];
-
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Recent Reviews',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          ...reviews.take(3).map<Widget>((r) => _reviewTile(r)),
-        ],
-      ),
-    );
-  }
-
-  Widget _reviewTile(Map r) {
-    return _card(
-      Row(
-        children: [
-          CircleAvatar(
-            backgroundColor: Colors.purple,
-            child: Text(r['user_name'][0]),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  r['user_name'],
-                  style: const TextStyle(color: Colors.white),
-                ),
-                Text(
-                  r['review'] ?? '',
-                  style: const TextStyle(color: Colors.white70),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _card(Widget child) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.card,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-      ),
-      child: child,
     );
   }
 }
