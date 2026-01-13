@@ -97,8 +97,9 @@ class _HomePageState extends State<HomePage> {
       // Build query params
       final params = <String, String>{};
       if (searchQuery.isNotEmpty) params['search'] = searchQuery;
-      if (selectedCuisines.isNotEmpty)
+      if (selectedCuisines.isNotEmpty) {
         params['cuisine'] = selectedCuisines.first;
+      }
       if (minRating > 0) params['min_rating'] = minRating.toString();
       if (maxDistance < 10) params['max_distance'] = maxDistance.toString();
       params['sort_by'] = sortBy;
@@ -846,7 +847,7 @@ class _HomePageState extends State<HomePage> {
                         child: Container(
                           width: 32,
                           height: 32,
-                          decoration: BoxDecoration(
+                          decoration: const BoxDecoration(
                             color: Colors.black54,
                             shape: BoxShape.circle,
                           ),
@@ -863,7 +864,7 @@ class _HomePageState extends State<HomePage> {
                       Container(
                         width: 32,
                         height: 32,
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           color: Colors.black54,
                           shape: BoxShape.circle,
                         ),

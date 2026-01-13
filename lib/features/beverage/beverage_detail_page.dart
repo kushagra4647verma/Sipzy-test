@@ -176,9 +176,9 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
   @override
   Widget build(BuildContext context) {
     if (loading) {
-      return Scaffold(
+      return const Scaffold(
         backgroundColor: AppTheme.background,
-        body: const Center(
+        body: Center(
           child: CircularProgressIndicator(color: AppTheme.primary),
         ),
       );
@@ -366,7 +366,7 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
       child: Container(
         width: 40,
         height: 40,
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: Colors.black54,
           shape: BoxShape.circle,
         ),
