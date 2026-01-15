@@ -40,29 +40,16 @@ class _RestaurantDetailState extends State<RestaurantDetail>
   bool alcoholicOnly = true;
   bool isBookmarked = false;
   bool showInviteModal = false;
-  bool showGroupMixMagic = false;
 
   String searchQuery = '';
   String sortBy = 'recommended';
 
   late TabController _tabController;
 
-  // Group Mix Magic state
-  int participants = 1;
-  List<String> selectedBaseDrinks = [];
-  bool isGenerating = false;
-  bool showResults = false;
-  List<Map<String, dynamic>> recommendations = [];
-  late AnimationController _animationController;
-
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    _animationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    );
 
     setState(() {
       alcoholicOnly = true;
@@ -77,20 +64,7 @@ class _RestaurantDetailState extends State<RestaurantDetail>
   @override
   void dispose() {
     _tabController.dispose();
-    _animationController.dispose();
     super.dispose();
-  }
-
-  // Get unique base drinks from beverages
-  List<String> get baseDrinks {
-    final drinks = <String>{};
-    for (final bev in beverages) {
-      final baseDrink = bev['base_drink'] ?? bev['baseDrink'];
-      if (baseDrink != null && baseDrink.toString().isNotEmpty) {
-        drinks.add(baseDrink.toString());
-      }
-    }
-    return drinks.toList()..sort();
   }
 
   Future<Map<String, String>> _getHeaders() async {
@@ -162,13 +136,17 @@ class _RestaurantDetailState extends State<RestaurantDetail>
                 ? (data['data'] as List? ?? [])
                 : (data is List ? data : []);
 
+            // Sort beverages for different sections
             _categorizeBeverages();
           });
           filterAndSort();
         }
       }
 
+      // Fetch events for this restaurant
       await _fetchRestaurantEvents();
+
+      // Fetch expert recommendations
       await _fetchExpertRecommendations();
     } catch (e) {
       print('❌ Fetch restaurant error: $e');
@@ -184,11 +162,13 @@ class _RestaurantDetailState extends State<RestaurantDetail>
   }
 
   void _categorizeBeverages() {
+    // Top SipZy beverages (highest sipzy_rating)
     final sorted = [...beverages];
     sorted.sort((a, b) => ((b['sipzy_rating'] ?? 0) as num)
         .compareTo((a['sipzy_rating'] ?? 0) as num));
     topSipzyBeverages = sorted.take(5).toList();
 
+    // Customer favorites (highest avgHuman rating)
     sorted.sort((a, b) {
       final aRating =
           (a['ratings']?['avgHuman'] ?? a['ratings']?['avghuman'] ?? 0) as num;
@@ -227,7 +207,8 @@ class _RestaurantDetailState extends State<RestaurantDetail>
     try {
       final headers = await _getHeaders();
       final response = await http.get(
-        Uri.parse('${EnvConfig.apiBaseUrl}/experts'),
+        Uri.parse(
+            '${EnvConfig.apiBaseUrl}/restaurants/${widget.restaurantId}/expert-recommendations'),
         headers: headers,
       );
 
@@ -348,85 +329,6 @@ class _RestaurantDetailState extends State<RestaurantDetail>
     }
   }
 
-  // ============== GROUP MIX MAGIC FUNCTIONS ==============
-
-  void _updateParticipants(int count) {
-    setState(() {
-      participants = count;
-      selectedBaseDrinks = List.filled(count, '');
-    });
-  }
-
-  void _handleGenerateMix() {
-    if (participants < 1) {
-      _toast('Please enter number of participants');
-      return;
-    }
-
-    if (selectedBaseDrinks.any((d) => d.isEmpty)) {
-      _toast('Please select base drink for all $participants participants');
-      return;
-    }
-
-    setState(() {
-      isGenerating = true;
-      showResults = false;
-    });
-
-    _animationController.repeat();
-
-    Future.delayed(const Duration(milliseconds: 2500), () {
-      final recs = <Map<String, dynamic>>[];
-
-      for (final baseDrink in selectedBaseDrinks) {
-        final filteredBeverages = beverages
-            .where((b) =>
-                (b['alcoholic'] == true ||
-                    b['category']
-                            ?.toString()
-                            .toLowerCase()
-                            .contains('alcohol') ==
-                        true) &&
-                (b['base_drink'] ?? b['baseDrink']) == baseDrink)
-            .toList();
-
-        if (filteredBeverages.isEmpty) continue;
-
-        filteredBeverages.sort((a, b) {
-          final aRating = (a['sipzy_rating'] ?? 0) as num;
-          final bRating = (b['sipzy_rating'] ?? 0) as num;
-          return bRating.compareTo(aRating);
-        });
-
-        final topBeverages = filteredBeverages.take(3).toList();
-        if (topBeverages.isNotEmpty) {
-          final randomIndex = DateTime.now().millisecond % topBeverages.length;
-          recs.add(topBeverages[randomIndex]);
-        }
-      }
-
-      _animationController.stop();
-
-      if (mounted) {
-        setState(() {
-          recommendations = recs;
-          isGenerating = false;
-          showResults = true;
-        });
-      }
-    });
-  }
-
-  void _resetGroupMixMagic() {
-    setState(() {
-      participants = 1;
-      selectedBaseDrinks = [];
-      isGenerating = false;
-      recommendations = [];
-      showResults = false;
-    });
-  }
-
   void _toast(String msg, {bool isError = false}) {
     if (!mounted) return;
 
@@ -524,573 +426,10 @@ class _RestaurantDetailState extends State<RestaurantDetail>
               user: widget.user,
               restaurant: restaurant!,
             ),
-
-          // Group Mix Magic Modal
-          if (showGroupMixMagic) _buildGroupMixMagicModal(),
-        ],
-      ),
-      // Surprise Me FAB
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => setState(() => showGroupMixMagic = true),
-        backgroundColor: AppTheme.secondary,
-        icon: const Icon(Icons.auto_awesome_rounded, color: Colors.white),
-        label: const Text(
-          'Surprise Me',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGroupMixMagicModal() {
-    return Container(
-      color: Colors.black87,
-      child: Dialog(
-        backgroundColor: const Color(0xFF0A0A0A),
-        insetPadding: const EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        ),
-        child: Container(
-          constraints: const BoxConstraints(maxHeight: 700),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildGroupMixHeader(),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
-                  child: showResults
-                      ? _buildGroupMixResults()
-                      : _buildGroupMixForm(),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildGroupMixHeader() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            AppTheme.secondary.withOpacity(0.4),
-            AppTheme.secondary.withOpacity(0.1),
-            Colors.transparent,
-          ],
-        ),
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(AppTheme.radiusLg),
-        ),
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Spacer(),
-              const Icon(
-                Icons.local_bar_rounded,
-                color: AppTheme.primary,
-                size: 32,
-              ),
-              const Spacer(),
-              IconButton(
-                onPressed: () => setState(() {
-                  showGroupMixMagic = false;
-                  _resetGroupMixMagic();
-                }),
-                icon: const Icon(Icons.close, color: Colors.white),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ShaderMask(
-            shaderCallback: (bounds) => const LinearGradient(
-              colors: [AppTheme.primary, AppTheme.secondary, Colors.pink],
-            ).createShader(bounds),
-            child: const Text(
-              'Group Mix Magic',
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Let AI create the perfect mix for your group',
-            style: TextStyle(
-              color: AppTheme.textSecondary,
-              fontSize: 14,
-            ),
-            textAlign: TextAlign.center,
-          ),
         ],
       ),
     );
   }
-
-  Widget _buildGroupMixForm() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: const [
-            Icon(Icons.people_rounded, color: AppTheme.secondary, size: 20),
-            SizedBox(width: 8),
-            Text(
-              'Number of Participants',
-              style: TextStyle(
-                color: AppTheme.textPrimary,
-                fontWeight: FontWeight.w600,
-                fontSize: 16,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Container(
-          decoration: BoxDecoration(
-            color: AppTheme.glassLight,
-            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-            border: Border.all(color: AppTheme.border),
-          ),
-          child: TextField(
-            keyboardType: TextInputType.number,
-            onChanged: (value) {
-              final count = int.tryParse(value) ?? 0;
-              if (count >= 1 && count <= 10) {
-                _updateParticipants(count);
-              }
-            },
-            style: const TextStyle(
-              color: AppTheme.textPrimary,
-              fontSize: 18,
-            ),
-            decoration: const InputDecoration(
-              hintText: 'e.g., 4',
-              hintStyle: TextStyle(color: AppTheme.textTertiary),
-              border: InputBorder.none,
-              contentPadding: EdgeInsets.all(16),
-            ),
-          ),
-        ),
-        if (selectedBaseDrinks.isNotEmpty) ...[
-          const SizedBox(height: 24),
-          Row(
-            children: const [
-              Icon(Icons.local_bar_rounded, color: AppTheme.primary, size: 20),
-              SizedBox(width: 8),
-              Text(
-                'Base Drink Selection',
-                style: TextStyle(
-                  color: AppTheme.textPrimary,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ...List.generate(selectedBaseDrinks.length, (index) {
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Participant ${index + 1}',
-                    style: const TextStyle(
-                      color: AppTheme.textSecondary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: AppTheme.glassLight,
-                      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                      border: Border.all(color: AppTheme.border),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: selectedBaseDrinks[index].isEmpty
-                            ? null
-                            : selectedBaseDrinks[index],
-                        hint: const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(
-                            'Choose spirit',
-                            style: TextStyle(color: AppTheme.textTertiary),
-                          ),
-                        ),
-                        isExpanded: true,
-                        dropdownColor: const Color(0xFF0A0A0A),
-                        icon: const Padding(
-                          padding: EdgeInsets.only(right: 16),
-                          child:
-                              Icon(Icons.arrow_drop_down, color: Colors.white),
-                        ),
-                        items: baseDrinks.map((drink) {
-                          return DropdownMenuItem(
-                            value: drink,
-                            child: Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 16),
-                              child: Text(
-                                drink,
-                                style: const TextStyle(
-                                    color: AppTheme.textPrimary),
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          if (value != null) {
-                            setState(() {
-                              selectedBaseDrinks[index] = value;
-                            });
-                          }
-                        },
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-        ],
-        const SizedBox(height: 32),
-        if (!isGenerating)
-          AppTheme.gradientButtonAmber(
-            onPressed: _handleGenerateMix,
-            child: Container(
-              height: 56,
-              alignment: Alignment.center,
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.auto_awesome_rounded,
-                      color: Colors.black, size: 24),
-                  SizedBox(width: 12),
-                  Text(
-                    'Generate Mix',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          )
-        else
-          _buildSlotMachine(),
-      ],
-    );
-  }
-
-  Widget _buildSlotMachine() {
-    return Container(
-      padding: const EdgeInsets.all(32),
-      decoration: BoxDecoration(
-        color: AppTheme.glassStrong,
-        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        border:
-            Border.all(color: AppTheme.secondary.withOpacity(0.3), width: 2),
-      ),
-      child: Column(
-        children: [
-          AnimatedBuilder(
-            animation: _animationController,
-            builder: (context, child) {
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(3, (i) {
-                  return Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 8),
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [AppTheme.secondary, Colors.pink],
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Transform.rotate(
-                      angle: _animationController.value * 6.28 * (i + 1),
-                      child: const Icon(
-                        Icons.local_bar_rounded,
-                        color: Colors.white,
-                        size: 32,
-                      ),
-                    ),
-                  );
-                }),
-              );
-            },
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            'Mixing Magic...',
-            style: TextStyle(
-              color: AppTheme.textPrimary,
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Finding the perfect combinations for your group',
-            style: TextStyle(
-              color: AppTheme.textSecondary,
-              fontSize: 14,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildGroupMixResults() {
-    return Column(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Row(
-              children: [
-                Icon(Icons.auto_awesome_rounded,
-                    color: AppTheme.primary, size: 24),
-                SizedBox(width: 8),
-                Text(
-                  'Your Perfect Mix',
-                  style: TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-            TextButton(
-              onPressed: _resetGroupMixMagic,
-              child: const Text(
-                'Try Again',
-                style: TextStyle(color: AppTheme.primary),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        if (recommendations.isEmpty)
-          const Center(
-            child: Padding(
-              padding: EdgeInsets.all(32),
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.local_bar_rounded,
-                    size: 64,
-                    color: AppTheme.textTertiary,
-                  ),
-                  SizedBox(height: 16),
-                  Text(
-                    'No cocktails found for this combination',
-                    style: TextStyle(color: AppTheme.textSecondary),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-          )
-        else
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              childAspectRatio: 0.75,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-            ),
-            itemCount: recommendations.length,
-            itemBuilder: (context, index) {
-              return _buildRecommendationCard(recommendations[index], index);
-            },
-          ),
-      ],
-    );
-  }
-
-  Widget _buildRecommendationCard(Map<String, dynamic> cocktail, int index) {
-    final photo = cocktail['photo'];
-    final name = cocktail['name'] ?? 'Cocktail';
-    final price = cocktail['price'] ?? 0;
-    final sipzyRating = cocktail['sipzy_rating'] ?? 0;
-    final baseDrink = cocktail['base_drink'] ?? cocktail['baseDrink'] ?? '';
-
-    return Container(
-      decoration: BoxDecoration(
-        color: AppTheme.card,
-        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-        border: Border.all(color: AppTheme.secondary.withOpacity(0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Stack(
-            children: [
-              ClipRRect(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(AppTheme.radiusLg),
-                ),
-                child: photo != null && photo.toString().isNotEmpty
-                    ? Image.network(
-                        photo,
-                        height: 120,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            height: 120,
-                            color: AppTheme.glassLight,
-                            child: const Icon(
-                              Icons.local_bar_rounded,
-                              size: 32,
-                              color: AppTheme.textTertiary,
-                            ),
-                          );
-                        },
-                      )
-                    : Container(
-                        height: 120,
-                        color: AppTheme.glassLight,
-                        child: const Icon(
-                          Icons.local_bar_rounded,
-                          size: 32,
-                          color: AppTheme.textTertiary,
-                        ),
-                      ),
-              ),
-              Positioned(
-                top: 8,
-                left: 8,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [AppTheme.primary, Colors.amber],
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    'Participant ${index + 1}',
-                    style: const TextStyle(
-                      color: Colors.black,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.black54,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.star_rounded,
-                          color: AppTheme.primary, size: 12),
-                      const SizedBox(width: 4),
-                      Text(
-                        sipzyRating.toStringAsFixed(1),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: const TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 6),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppTheme.secondary.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(8),
-                    border:
-                        Border.all(color: AppTheme.secondary.withOpacity(0.3)),
-                  ),
-                  child: Text(
-                    '#$baseDrink',
-                    style: const TextStyle(
-                      color: AppTheme.secondary,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '₹$price',
-                  style: const TextStyle(
-                    color: AppTheme.textPrimary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Continuing with the existing widgets from the previous file...
-  // (Include all the _buildEnhancedHeader, _buildRestaurantInfo, _buildTopSipzySection, etc.)
 
   Widget _buildEnhancedHeader() {
     final image = restaurant!['image'] ??
@@ -1105,6 +444,7 @@ class _RestaurantDetailState extends State<RestaurantDetail>
 
     return Stack(
       children: [
+        // Hero Image
         if (image != null && image.toString().isNotEmpty)
           Image.network(
             image,
@@ -1116,6 +456,8 @@ class _RestaurantDetailState extends State<RestaurantDetail>
           )
         else
           _buildPlaceholderImage(),
+
+        // Gradient Overlay
         Container(
           height: 360,
           decoration: const BoxDecoration(
@@ -1126,6 +468,8 @@ class _RestaurantDetailState extends State<RestaurantDetail>
             ),
           ),
         ),
+
+        // Top Action Buttons
         Positioned(
           top: 40,
           left: 16,
@@ -1159,6 +503,8 @@ class _RestaurantDetailState extends State<RestaurantDetail>
             ],
           ),
         ),
+
+        // Restaurant Info Overlay
         Positioned(
           bottom: 20,
           left: 16,
@@ -1228,9 +574,688 @@ class _RestaurantDetailState extends State<RestaurantDetail>
     );
   }
 
-  // Include all remaining widget methods from previous implementation...
-  // (_buildRestaurantInfo, _buildTopSipzySection, _buildExpertRecommendationsSection, etc.)
-  // Due to character limits, I'm showing the structure. Copy the rest from the previous file.
+  Widget _buildRestaurantInfo() {
+    final rating = restaurant!['sipzy_rating'] ?? 0;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppTheme.primary.withOpacity(0.5)),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.star_rounded,
+                  color: AppTheme.primary,
+                  size: 20,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  rating.toStringAsFixed(1),
+                  style: const TextStyle(
+                    color: AppTheme.primary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTopSipzySection() {
+    if (topSipzyBeverages.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.all(16),
+          child: Text(
+            'Top SipZy Beverages',
+            style: TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 240,
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            scrollDirection: Axis.horizontal,
+            itemCount: topSipzyBeverages.length,
+            separatorBuilder: (context, index) => const SizedBox(width: 12),
+            itemBuilder: (context, index) {
+              return SizedBox(
+                width: 160,
+                child: _buildBeverageCard(topSipzyBeverages[index]),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  Widget _buildCustomerFavoritesSection() {
+    if (customerFavorites.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.all(16),
+          child: Text(
+            'Customer Favorites',
+            style: TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 240,
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            scrollDirection: Axis.horizontal,
+            itemCount: customerFavorites.length,
+            separatorBuilder: (context, index) => const SizedBox(width: 12),
+            itemBuilder: (context, index) {
+              return SizedBox(
+                width: 160,
+                child: _buildBeverageCard(customerFavorites[index]),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  Widget _buildAmenitiesSection() {
+    final amenities = restaurant!['amenities'] as List? ?? [];
+    if (amenities.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Amenities',
+            style: TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: amenities.map((amenity) {
+              return Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppTheme.glassLight,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppTheme.border),
+                ),
+                child: Text(
+                  amenity.toString(),
+                  style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 14,
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPhotoGallerySection() {
+    final photos = restaurant!['photos'] as List? ?? [];
+    if (photos.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.all(16),
+          child: Text(
+            'Photo Gallery',
+            style: TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 180,
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            scrollDirection: Axis.horizontal,
+            itemCount: photos.length,
+            separatorBuilder: (context, index) => const SizedBox(width: 12),
+            itemBuilder: (context, index) {
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+                child: Image.network(
+                  photos[index],
+                  width: 240,
+                  height: 180,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      width: 240,
+                      height: 180,
+                      color: AppTheme.glassLight,
+                      child: const Icon(
+                        Icons.broken_image_rounded,
+                        size: 48,
+                        color: AppTheme.textTertiary,
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  Widget _buildEventsSection() {
+    if (events.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.all(16),
+          child: Text(
+            'Upcoming Events',
+            style: TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 160,
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            scrollDirection: Axis.horizontal,
+            itemCount: events.length,
+            separatorBuilder: (context, index) => const SizedBox(width: 12),
+            itemBuilder: (context, index) {
+              final event = events[index];
+              return Container(
+                width: 280,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppTheme.card,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+                  border: Border.all(color: AppTheme.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      event['name'] ?? 'Event',
+                      style: const TextStyle(
+                        color: AppTheme.textPrimary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      event['description'] ?? '',
+                      style: const TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 14,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const Spacer(),
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.calendar_today_rounded,
+                          size: 14,
+                          color: AppTheme.textTertiary,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          event['eventdate'] ?? 'TBA',
+                          style: const TextStyle(
+                            color: AppTheme.textTertiary,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  Widget _buildExpertRecommendationsSection() {
+    if (expertRecommendations.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [AppTheme.secondary, AppTheme.secondaryLight],
+                  ),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                ),
+                child: const Icon(
+                  Icons.verified,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Expert Recommendations',
+                style: TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(
+          height: 200,
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            scrollDirection: Axis.horizontal,
+            itemCount: expertRecommendations.length,
+            separatorBuilder: (context, index) => const SizedBox(width: 12),
+            itemBuilder: (context, index) {
+              final expert = expertRecommendations[index];
+              return Container(
+                width: 160,
+                decoration: BoxDecoration(
+                  color: AppTheme.card,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+                  border:
+                      Border.all(color: AppTheme.secondary.withOpacity(0.3)),
+                ),
+                child: Column(
+                  children: [
+                    // Expert Avatar
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      child: CircleAvatar(
+                        radius: 40,
+                        backgroundColor: AppTheme.secondary,
+                        child: expert['avatar'] != null
+                            ? ClipOval(
+                                child: Image.network(
+                                  expert['avatar'],
+                                  width: 80,
+                                  height: 80,
+                                  fit: BoxFit.cover,
+                                ),
+                              )
+                            : Text(
+                                expert['name']?[0] ?? 'E',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                      ),
+                    ),
+                    // Expert Name
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        expert['name'] ?? 'Expert',
+                        style: const TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    // Rating
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.star_rounded,
+                          color: AppTheme.primary,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${expert['avg_score_given'] ?? 0}',
+                          style: const TextStyle(
+                            color: AppTheme.primary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  Widget _buildToggleSearchSort() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppTheme.border)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: AppTheme.glassLight,
+                  borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+                ),
+                child: Row(
+                  children: [
+                    _buildToggleButton(
+                      icon: Icons.local_bar_rounded,
+                      isSelected: alcoholicOnly,
+                      onTap: () {
+                        setState(() => alcoholicOnly = true);
+                        filterAndSort();
+                      },
+                      color: AppTheme.primary,
+                    ),
+                    const SizedBox(width: 4),
+                    _buildToggleButton(
+                      icon: Icons.coffee_rounded,
+                      isSelected: !alcoholicOnly,
+                      onTap: () {
+                        setState(() => alcoholicOnly = false);
+                        filterAndSort();
+                      },
+                      color: AppTheme.secondary,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Container(
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: AppTheme.glassLight,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                    border: Border.all(color: AppTheme.border),
+                  ),
+                  child: TextField(
+                    onChanged: (v) {
+                      searchQuery = v;
+                      filterAndSort();
+                    },
+                    style: const TextStyle(
+                        color: AppTheme.textPrimary, fontSize: 14),
+                    decoration: const InputDecoration(
+                      hintText: 'Search beverages...',
+                      hintStyle:
+                          TextStyle(color: AppTheme.textTertiary, fontSize: 14),
+                      prefixIcon: Icon(Icons.search,
+                          color: AppTheme.textSecondary, size: 18),
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(vertical: 8),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              InkWell(
+                onTap: () => _showSortSheet(),
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: AppTheme.glassLight,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                    border: Border.all(color: AppTheme.border),
+                  ),
+                  child: const Icon(
+                    Icons.sort_rounded,
+                    color: AppTheme.textPrimary,
+                    size: 18,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBeveragesGrid() {
+    if (filteredBeverages.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.search_rounded,
+                size: 64,
+                color: AppTheme.textTertiary,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'No beverages found',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.all(16),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 0.7,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+      ),
+      itemCount: filteredBeverages.length,
+      itemBuilder: (context, index) {
+        final bev = filteredBeverages[index];
+        return _buildBeverageCard(bev);
+      },
+    );
+  }
+
+  Widget _buildBeverageCard(Map bev) {
+    final photo = bev['photo'];
+    final name = bev['name'] ?? 'Beverage';
+    final price = bev['price'] ?? 0;
+    final ratings = bev['ratings'] as Map<String, dynamic>? ?? {};
+    final avgHuman = ratings['avgHuman'] ?? ratings['avghuman'] ?? 0;
+
+    return InkWell(
+      onTap: () => context.push('/beverage/${bev['id']}'),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppTheme.card,
+          borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+          border: Border.all(color: AppTheme.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(AppTheme.radiusLg),
+                  ),
+                  child: photo != null && photo.toString().isNotEmpty
+                      ? Image.network(
+                          photo,
+                          height: 120,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return _buildBeveragePlaceholder();
+                          },
+                        )
+                      : _buildBeveragePlaceholder(),
+                ),
+                // Camera & Share icons
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 28,
+                        height: 28,
+                        decoration: const BoxDecoration(
+                          color: Colors.black54,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.camera_alt_rounded,
+                          color: Colors.white,
+                          size: 14,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        width: 28,
+                        height: 28,
+                        decoration: const BoxDecoration(
+                          color: Colors.black54,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.share_rounded,
+                          color: Colors.white,
+                          size: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(Icons.star_rounded,
+                          color: AppTheme.primary, size: 14),
+                      const SizedBox(width: 4),
+                      Text(
+                        avgHuman.toStringAsFixed(1),
+                        style: const TextStyle(
+                          color: AppTheme.primary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '₹$price',
+                    style: const TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _buildPlaceholderImage() {
     return Container(
@@ -1242,6 +1267,23 @@ class _RestaurantDetailState extends State<RestaurantDetail>
           Icon(
             Icons.restaurant_rounded,
             size: 64,
+            color: AppTheme.textTertiary,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBeveragePlaceholder() {
+    return Container(
+      height: 120,
+      color: AppTheme.glassLight,
+      child: const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.local_bar_rounded,
+            size: 32,
             color: AppTheme.textTertiary,
           ),
         ],
@@ -1263,19 +1305,6 @@ class _RestaurantDetailState extends State<RestaurantDetail>
       ),
     );
   }
-
-  // Add all remaining methods here...
-  // For brevity, use the implementation from restaurant_detail_updated.dart
-
-  Widget _buildRestaurantInfo() => const SizedBox();
-  Widget _buildTopSipzySection() => const SizedBox();
-  Widget _buildCustomerFavoritesSection() => const SizedBox();
-  Widget _buildAmenitiesSection() => const SizedBox();
-  Widget _buildPhotoGallerySection() => const SizedBox();
-  Widget _buildEventsSection() => const SizedBox();
-  Widget _buildExpertRecommendationsSection() => const SizedBox();
-  Widget _buildToggleSearchSort() => const SizedBox();
-  Widget _buildBeveragesGrid() => const SizedBox();
 
   Widget _buildToggleButton({
     required IconData icon,
