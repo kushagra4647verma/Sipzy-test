@@ -1,4 +1,4 @@
-name: sipzy
+name: SipZy
 description: A beverage discovery and rating platform
 publish_to: "none"
 version: 1.0.0+1
@@ -19,6 +19,7 @@ dependencies:
   google_fonts: ^6.1.0
   shimmer: ^3.0.0
   cached_network_image: ^3.3.1
+  flutter_launcher_icons: ^0.14.4
 
 fonts:
   - family: SpaceGrotesk
@@ -48,7 +49,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # If you have assets, uncomment and configure:
-  # assets:
-  #   - assets/images/
-  #   - assets/icons/
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/SipZy_Logo.png"

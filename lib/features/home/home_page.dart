@@ -692,6 +692,9 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Updated _buildHeader() method for HomePage
+// Replace the existing _buildHeader() method in lib/features/home/home_page.dart
+
   Widget _buildHeader() {
     final hasActiveFilters =
         selectedCuisines.isNotEmpty || minRating > 0 || maxDistance < 10;
@@ -704,117 +707,202 @@ class _HomePageState extends State<HomePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Location & User
+          // Top Row: Location selector and Expert Corner
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [AppTheme.primary, AppTheme.primaryLight],
+              // Location Selector
+              Row(
+                children: [
+                  const Icon(
+                    Icons.location_on,
+                    color: AppTheme.primary,
+                    size: 20,
                   ),
-                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                ),
-                child: const Icon(
-                  Icons.local_bar_rounded,
-                  color: Colors.black,
-                  size: 24,
-                ),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Bangalore',
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(
+                    Icons.keyboard_arrow_down,
+                    color: AppTheme.textSecondary,
+                    size: 20,
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'SipZy',
-                      style: Theme.of(context).textTheme.headlineMedium,
+
+              // Expert Corner Button
+              InkWell(
+                onTap: () => context.push('/expert'),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [AppTheme.secondary, AppTheme.secondaryLight],
                     ),
-                    Text(
-                      'Welcome, ${widget.user['name'] ?? 'User'}!',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
+                    borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.secondary.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.verified,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Expert Corner',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
           ),
+
           const SizedBox(height: 16),
 
-          // Search
-          TextField(
-            onChanged: (v) {
-              searchQuery = v;
-              fetchRestaurants();
-            },
-            style: const TextStyle(color: AppTheme.textPrimary),
-            decoration: InputDecoration(
-              hintText: 'Search restaurants, cuisines, areas...',
-              hintStyle: const TextStyle(color: AppTheme.textTertiary),
-              prefixIcon:
-                  const Icon(Icons.search, color: AppTheme.textSecondary),
-              suffixIcon:
-                  const Icon(Icons.mic_rounded, color: AppTheme.primary),
-              filled: true,
-              fillColor: AppTheme.glassLight,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                borderSide: BorderSide.none,
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: AppTheme.spacing16,
-                vertical: AppTheme.spacing12,
+          // Search Bar
+          Container(
+            decoration: BoxDecoration(
+              color: AppTheme.glassLight,
+              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+              border: Border.all(color: AppTheme.border),
+            ),
+            child: TextField(
+              onChanged: (v) {
+                searchQuery = v;
+                fetchRestaurants();
+              },
+              style: const TextStyle(color: AppTheme.textPrimary),
+              decoration: InputDecoration(
+                hintText: 'Search restaurants, cuisines, areas...',
+                hintStyle: const TextStyle(color: AppTheme.textTertiary),
+                prefixIcon:
+                    const Icon(Icons.search, color: AppTheme.textSecondary),
+                suffixIcon: const Icon(
+                  Icons.mic_rounded,
+                  color: AppTheme.primary,
+                ),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: AppTheme.spacing16,
+                  vertical: AppTheme.spacing12,
+                ),
               ),
             ),
           ),
+
           const SizedBox(height: 12),
 
-          // Filter & Sort buttons
+          // Filter & Sort Buttons Row
           Row(
             children: [
+              // Filters Button
               Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _showFilters,
-                  icon: const Icon(Icons.filter_list_rounded, size: 18),
-                  label: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text('Filters'),
-                      if (hasActiveFilters) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          width: 6,
-                          height: 6,
-                          decoration: const BoxDecoration(
-                            color: AppTheme.primary,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppTheme.textPrimary,
-                    side: const BorderSide(color: AppTheme.border),
+                child: InkWell(
+                  onTap: _showFilters,
+                  child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
+                    decoration: BoxDecoration(
+                      color: AppTheme.glassLight,
                       borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                      border: Border.all(color: AppTheme.border),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.filter_list_rounded,
+                          size: 18,
+                          color: AppTheme.textPrimary,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Filters',
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                        ),
+                        if (hasActiveFilters) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: const BoxDecoration(
+                              color: AppTheme.primary,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ),
               ),
+
               const SizedBox(width: 12),
+
+              // Sort Dropdown Button
               Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _showSort,
-                  icon: const Icon(Icons.sort_rounded, size: 18),
-                  label: const Text('Sort'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppTheme.textPrimary,
-                    side: const BorderSide(color: AppTheme.border),
+                child: InkWell(
+                  onTap: _showSort,
+                  child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
+                    decoration: BoxDecoration(
+                      color: AppTheme.glassLight,
                       borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                      border: Border.all(color: AppTheme.border),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.swap_vert_rounded,
+                          size: 18,
+                          color: AppTheme.textPrimary,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Highest Rating',
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.keyboard_arrow_down,
+                          size: 16,
+                          color: AppTheme.textSecondary,
+                        ),
+                      ],
                     ),
                   ),
                 ),
