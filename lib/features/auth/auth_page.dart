@@ -17,7 +17,7 @@ class AuthPage extends StatefulWidget {
 
 class _AuthPageState extends State<AuthPage> {
   final _authService = AuthService();
-
+  final FocusNode _otpFocusNode = FocusNode();
   AuthStep step = AuthStep.phone;
 
   String phone = '';
@@ -38,6 +38,7 @@ class _AuthPageState extends State<AuthPage> {
 
   @override
   void dispose() {
+    _otpFocusNode.dispose();
     _phoneController.dispose();
     _otpController.dispose();
     _nameController.dispose();
@@ -224,21 +225,81 @@ class _AuthPageState extends State<AuthPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Container(
-            padding: const EdgeInsets.all(28),
-            decoration: BoxDecoration(
-              color: AppColors.card,
-              borderRadius: BorderRadius.circular(AppRadius.lg),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFF0F0F0F),
+              Color(0xFF1A1A1A),
+            ],
+          ),
+        ),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                _logo(),
+                const SizedBox(height: 32),
+                _authCard(),
+                const SizedBox(height: 16),
+                _termsText(),
+              ],
             ),
-            width: 380,
-            child: _buildStep(),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _termsText() {
+    return const Text(
+      "By continuing, you agree to SipZy's Terms of Service and Privacy Policy",
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        color: Colors.white38,
+        fontSize: 12,
+      ),
+    );
+  }
+
+  Widget _authCard() {
+    return Container(
+      width: 380,
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2A2A2A),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.4),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: _buildStep(),
+    );
+  }
+
+  Widget _logo() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.local_drink, color: AppColors.primary, size: 36),
+        const SizedBox(width: 8),
+        RichText(
+          text: const TextSpan(
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+            children: [
+              TextSpan(text: 'Sip', style: TextStyle(color: Color(0xFFF5B642))),
+              TextSpan(text: 'Zy', style: TextStyle(color: Color(0xFF9B6BFF))),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -258,30 +319,68 @@ class _AuthPageState extends State<AuthPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Welcome to SipZy!',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          'Welcome!',
+          style: TextStyle(
+            fontSize: 26,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'Enter your phone number to get started',
+          style: TextStyle(color: Colors.white70),
+        ),
+        const SizedBox(height: 24),
+        Row(
+          children: const [
+            Icon(Icons.phone, color: Color(0xFFF5B642), size: 18),
+            SizedBox(width: 8),
+            Text(
+              'Phone Number',
+              style: TextStyle(color: Colors.white70),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
-        const Text('Enter your phone number to get started'),
-        const SizedBox(height: 24),
         TextField(
           controller: _phoneController,
           keyboardType: TextInputType.phone,
           maxLength: 10,
           onChanged: (v) => phone = v.replaceAll(RegExp(r'\D'), ''),
-          decoration: const InputDecoration(
-            labelText: 'Phone Number',
-            prefixText: '+91 ',
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
             counterText: '',
-            helperText: 'Enter 10-digit mobile number',
+            hintText: '10-digit phone number',
+            hintStyle: const TextStyle(color: Colors.white38),
+            filled: true,
+            fillColor: const Color(0xFF3A3A3A),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none,
+            ),
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 20),
         SizedBox(
           width: double.infinity,
+          height: 52,
           child: ElevatedButton(
             onPressed: loading ? null : sendOtp,
-            child: Text(loading ? 'Sending…' : 'Send OTP'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFF5B642),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(26),
+              ),
+            ),
+            child: Text(
+              loading ? 'Sending OTP…' : 'Send OTP',
+              style: const TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
           ),
         ),
       ],
@@ -294,95 +393,157 @@ class _AuthPageState extends State<AuthPage> {
       children: [
         const Text(
           'Verify OTP',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
         ),
-        const SizedBox(height: 8),
-        Text('Enter the 6-digit code sent to +91 $phone'),
+        const SizedBox(height: 6),
+        Text(
+          'Enter the 6-digit code sent to $phone',
+          style: const TextStyle(color: Colors.white70),
+        ),
 
-        // Show dev OTP prominently
+        /// DEV OTP DISPLAY
         if (devOtp != null) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           Container(
-            padding: const EdgeInsets.all(16),
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 12),
             decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.2),
+              color: const Color(0xFF3A3A3A),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.primary),
             ),
-            child: Column(
-              children: [
-                const Row(
-                  children: [
-                    Icon(Icons.bug_report, color: AppColors.primary, size: 20),
-                    SizedBox(width: 8),
-                    Text(
-                      'DEV MODE',
-                      style: TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
+            child: Center(
+              child: Text(
+                'Your OTP:  $devOtp',
+                style: const TextStyle(
+                  color: Color(0xFFF5B642),
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.2,
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Your OTP: $devOtp',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 4,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'From DigitalOcean Backend',
-                  style: TextStyle(color: Colors.white60, fontSize: 11),
-                ),
-              ],
+              ),
             ),
           ),
         ],
 
+        const SizedBox(height: 20),
+
+        /// OTP BOXES
+        _otpBoxes(),
+
         const SizedBox(height: 24),
-        TextField(
-          controller: _otpController,
-          keyboardType: TextInputType.number,
-          maxLength: 6,
-          autofocus: true,
-          onChanged: (v) {
-            otp = v.replaceAll(RegExp(r'\D'), '');
-          },
-          decoration: const InputDecoration(
-            labelText: 'OTP',
-            counterText: '',
-            helperText: 'Enter the 6-digit code',
-          ),
-        ),
-        const SizedBox(height: 16),
+
+        /// VERIFY BUTTON
         SizedBox(
           width: double.infinity,
+          height: 52,
           child: ElevatedButton(
             onPressed: loading ? null : verifyOtp,
-            child: Text(loading ? 'Verifying…' : 'Verify OTP'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFF5B642),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(26),
+              ),
+            ),
+            child: Text(
+              loading ? 'Verifying…' : 'Verify OTP',
+              style: const TextStyle(
+                color: Colors.black,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ),
-        TextButton(
-          onPressed: () {
-            setState(() {
-              step = AuthStep.phone;
-              otp = '';
-              devOtp = null;
-              _otpController.clear();
-            });
-          },
-          child: const Text('Change Phone Number'),
-        ),
-        TextButton(
-          onPressed: loading ? null : sendOtp,
-          child: const Text('Resend OTP'),
+
+        const SizedBox(height: 12),
+
+        Center(
+          child: TextButton(
+            onPressed: () {
+              setState(() {
+                step = AuthStep.phone;
+                otp = '';
+                devOtp = null;
+                _otpController.clear();
+              });
+            },
+            child: const Text(
+              'Change Phone Number',
+              style: TextStyle(color: Colors.white54),
+            ),
+          ),
         ),
       ],
+    );
+  }
+
+  Widget _otpBoxes() {
+    return GestureDetector(
+      onTap: () => _otpFocusNode.requestFocus(),
+      child: Column(
+        children: [
+          /// VISIBLE OTP BOXES
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: List.generate(6, (index) {
+              final char = index < otp.length ? otp[index] : '';
+              final isActive =
+                  otp.length < 6 ? index == otp.length : index == 5;
+
+              return Container(
+                width: 46,
+                height: 52,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3A3A3A),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color:
+                        isActive ? const Color(0xFFF5B642) : Colors.transparent,
+                    width: 1.5,
+                  ),
+                ),
+                child: Text(
+                  char,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              );
+            }),
+          ),
+
+          /// HIDDEN TEXTFIELD (REAL INPUT)
+          SizedBox(
+            height: 0,
+            width: 0,
+            child: TextField(
+              focusNode: _otpFocusNode,
+              controller: _otpController,
+              keyboardType: TextInputType.number,
+              maxLength: 6,
+              autofocus: true,
+              onChanged: (v) {
+                otp = v.replaceAll(RegExp(r'\D'), '');
+                setState(() {});
+
+                if (otp.length == 6 && !loading) {
+                  verifyOtp();
+                }
+              },
+              decoration: const InputDecoration(
+                counterText: '',
+                border: InputBorder.none,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

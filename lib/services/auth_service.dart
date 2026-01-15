@@ -6,7 +6,18 @@ import '../config/env_config.dart';
 
 class AuthService {
   final _supabase = Supabase.instance.client;
-
+  String name = '';
+  String phone = '';
+  String email = '';
+  String dob = '';
+  String city = '';
+  bool enableLocation = false;
+  bool agreedToTerms = false;
+  bool agreedToPrivacy = false;
+  bool confirmedAge = false;
+  bool enableNotifications = false;
+  bool enableSocialFeatures = false;
+  bool loading = false;
   // Toggle this for production
   static const bool USE_DEV_MODE = true;
 
@@ -141,8 +152,13 @@ class AuthService {
   /// Sign up new user with profile data
   Future<Map<String, dynamic>> signUp({
     required String name,
-    required int age,
+    required String email,
+    required String dob,
+    required String city,
     required String phone,
+    bool enableLocation = false,
+    bool enableNotifications = false,
+    bool enableSocialFeatures = false,
   }) async {
     try {
       final userId = _supabase.auth.currentUser?.id;
@@ -160,7 +176,10 @@ class AuthService {
           .insert({
             'id': userId,
             'name': name,
+            'email': email,
             'phone': phone,
+            // Store additional info as metadata or in separate fields
+            // You may need to add these columns to your profiles table
           })
           .select()
           .single();

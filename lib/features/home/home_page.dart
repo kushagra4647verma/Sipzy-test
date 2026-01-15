@@ -30,11 +30,36 @@ class _HomePageState extends State<HomePage> {
   bool hasError = false;
   String searchQuery = '';
 
-  // Filter states
   List<String> selectedCuisines = [];
   double minRating = 0;
   double maxDistance = 10;
+  double minCost = 0;
+  double maxCost = 5000;
+
   String sortBy = 'rating';
+  final baseDrinks = [
+    'Whisky',
+    'Rum',
+    'Vodka',
+    'Gin',
+    'Beer',
+    'Wine',
+    'Water',
+    'Soda',
+    'Milk',
+    'Juice'
+  ];
+
+  Set<String> selectedBaseDrinks = {};
+  final restaurantTypes = [
+    'Fine Dining',
+    'Casual',
+    'Romantic',
+    'Gastropub',
+    'Brewery'
+  ];
+
+  Set<String> selectedRestaurantTypes = {};
 
   final cuisines = [
     'Indian',
@@ -161,8 +186,6 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _fetchFeaturedAndTrending(Map<String, String> headers) async {
     try {
-      // For now, just use top-rated restaurants as featured/trending
-      // You can create specific endpoints on your backend later
       if (restaurants.isNotEmpty) {
         if (mounted) {
           setState(() {
@@ -254,8 +277,9 @@ class _HomePageState extends State<HomePage> {
       backgroundColor: AppTheme.card,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
-        borderRadius:
-            BorderRadius.vertical(top: Radius.circular(AppTheme.radiusLg)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppTheme.radiusLg),
+        ),
       ),
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) {
@@ -263,183 +287,271 @@ class _HomePageState extends State<HomePage> {
             padding: EdgeInsets.only(
               bottom: MediaQuery.of(context).viewInsets.bottom,
             ),
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Filters',
-                      style: TextStyle(
-                        color: AppTheme.textPrimary,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Cuisine
-                    const Text(
-                      'Cuisine',
-                      style: TextStyle(
-                        color: AppTheme.textSecondary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: cuisines.map((cuisine) {
-                        final isSelected = selectedCuisines.contains(cuisine);
-                        return InkWell(
-                          onTap: () {
-                            setModalState(() {
-                              if (isSelected) {
-                                selectedCuisines.remove(cuisine);
-                              } else {
-                                selectedCuisines.clear();
-                                selectedCuisines.add(cuisine);
-                              }
-                            });
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              gradient: isSelected
-                                  ? const LinearGradient(
-                                      colors: [
-                                        AppTheme.primary,
-                                        AppTheme.primaryLight
-                                      ],
-                                    )
-                                  : null,
-                              color: isSelected ? null : AppTheme.glassLight,
-                              borderRadius:
-                                  BorderRadius.circular(AppTheme.radiusFull),
-                              border: Border.all(
-                                color: isSelected
-                                    ? Colors.transparent
-                                    : AppTheme.border,
-                              ),
-                            ),
-                            child: Text(
-                              cuisine,
-                              style: TextStyle(
-                                color: isSelected
-                                    ? Colors.black
-                                    : AppTheme.textPrimary,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
+            child: SizedBox(
+              height: MediaQuery.of(context).size.height * 0.9, // ✅ FULL HEIGHT
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.max, // ✅ IMPORTANT FIX
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // HEADER
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Filters',
+                            style: TextStyle(
+                              color: AppTheme.textPrimary,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                        );
-                      }).toList(),
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // Rating
-                    Text(
-                      'SipZy Rating: ${minRating.toStringAsFixed(1)}+ stars',
-                      style: const TextStyle(
-                        color: AppTheme.textSecondary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
+                          InkWell(
+                            onTap: () => Navigator.pop(context),
+                            child: const Icon(
+                              Icons.close,
+                              color: AppTheme.primary,
+                              size: 22,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    Slider(
-                      value: minRating,
-                      min: 0,
-                      max: 5,
-                      divisions: 10,
-                      activeColor: AppTheme.primary,
-                      inactiveColor: AppTheme.border,
-                      onChanged: (value) {
-                        setModalState(() => minRating = value);
-                      },
-                    ),
 
-                    const SizedBox(height: 16),
+                      const SizedBox(height: 24),
 
-                    // Distance
-                    Text(
-                      'Distance: Up to ${maxDistance.toStringAsFixed(1)} km',
-                      style: const TextStyle(
-                        color: AppTheme.textSecondary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
+                      // CUISINE
+                      const Text(
+                        'Cuisine',
+                        style: TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    Slider(
-                      value: maxDistance,
-                      min: 0,
-                      max: 10,
-                      divisions: 20,
-                      activeColor: AppTheme.primary,
-                      inactiveColor: AppTheme.border,
-                      onChanged: (value) {
-                        setModalState(() => maxDistance = value);
-                      },
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // Action buttons
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () {
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: cuisines.map((cuisine) {
+                          final isSelected = selectedCuisines.contains(cuisine);
+                          return _filterChip(
+                            label: cuisine,
+                            isSelected: isSelected,
+                            onTap: () {
                               setModalState(() {
-                                selectedCuisines.clear();
-                                minRating = 0;
-                                maxDistance = 10;
-                              });
-                              setState(() {
-                                selectedCuisines.clear();
-                                minRating = 0;
-                                maxDistance = 10;
+                                if (isSelected) {
+                                  selectedCuisines.remove(cuisine);
+                                } else {
+                                  selectedCuisines.clear();
+                                  selectedCuisines.add(cuisine);
+                                }
                               });
                             },
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppTheme.textPrimary,
-                              side: const BorderSide(color: AppTheme.border),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius:
-                                    BorderRadius.circular(AppTheme.radiusMd),
+                          );
+                        }).toList(),
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // BASE DRINK
+                      const Text(
+                        'Base Drink',
+                        style: TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: baseDrinks.map((drink) {
+                          final isSelected = selectedBaseDrinks.contains(drink);
+                          return _filterChip(
+                            label: drink,
+                            isSelected: isSelected,
+                            onTap: () {
+                              setModalState(() {
+                                if (isSelected) {
+                                  selectedBaseDrinks.remove(drink);
+                                } else {
+                                  selectedBaseDrinks.add(drink);
+                                }
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // RATING
+                      Text(
+                        'SipZy Rating: ${minRating.toStringAsFixed(1)}+ stars',
+                        style: const TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Slider(
+                        value: minRating,
+                        min: 0,
+                        max: 5,
+                        divisions: 10,
+                        activeColor: AppTheme.primary,
+                        inactiveColor: AppTheme.border,
+                        onChanged: (value) {
+                          setModalState(() => minRating = value);
+                        },
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // DISTANCE
+                      Text(
+                        'Distance: Up to ${maxDistance.toStringAsFixed(1)} km',
+                        style: const TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Slider(
+                        value: maxDistance,
+                        min: 0,
+                        max: 10,
+                        divisions: 20,
+                        activeColor: AppTheme.primary,
+                        inactiveColor: AppTheme.border,
+                        onChanged: (value) {
+                          setModalState(() => maxDistance = value);
+                        },
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // RESTAURANT TYPE
+                      const Text(
+                        'Restaurant Type',
+                        style: TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: restaurantTypes.map((type) {
+                          final isSelected =
+                              selectedRestaurantTypes.contains(type);
+                          return _filterChip(
+                            label: type,
+                            isSelected: isSelected,
+                            onTap: () {
+                              setModalState(() {
+                                if (isSelected) {
+                                  selectedRestaurantTypes.remove(type);
+                                } else {
+                                  selectedRestaurantTypes.add(type);
+                                }
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // COST FOR TWO
+                      Text(
+                        'Cost for Two: ₹${minCost.toInt()} - ₹${maxCost.toInt()}',
+                        style: const TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      RangeSlider(
+                        values: RangeValues(minCost, maxCost),
+                        min: 0,
+                        max: 5000,
+                        divisions: 50,
+                        activeColor: AppTheme.primary,
+                        inactiveColor: AppTheme.border,
+                        onChanged: (values) {
+                          setModalState(() {
+                            minCost = values.start;
+                            maxCost = values.end;
+                          });
+                        },
+                      ),
+
+                      const SizedBox(height: 32),
+
+                      // ACTION BUTTONS
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () {
+                                setModalState(() {
+                                  selectedCuisines.clear();
+                                  selectedBaseDrinks.clear();
+                                  selectedRestaurantTypes.clear();
+                                  minRating = 0;
+                                  maxDistance = 10;
+                                  minCost = 0;
+                                  maxCost = 5000;
+                                });
+
+                                setState(() {
+                                  selectedCuisines.clear();
+                                  selectedBaseDrinks.clear();
+                                  selectedRestaurantTypes.clear();
+                                  minRating = 0;
+                                  maxDistance = 10;
+                                  minCost = 0;
+                                  maxCost = 5000;
+                                });
+                              },
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppTheme.textPrimary,
+                                side: const BorderSide(color: AppTheme.border),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(AppTheme.radiusMd),
+                                ),
                               ),
+                              child: const Text('Clear All'),
                             ),
-                            child: const Text('Clear All'),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: AppTheme.gradientButtonAmber(
-                            onPressed: () {
-                              setState(() {
-                                // Apply filters
-                              });
-                              Navigator.pop(context);
-                              fetchRestaurants();
-                            },
-                            child: const Text('Apply Filters'),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: AppTheme.gradientButtonAmber(
+                              onPressed: () {
+                                Navigator.pop(context);
+                                fetchRestaurants();
+                              },
+                              child: const Text('Apply Filters'),
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                  ],
+                        ],
+                      ),
+
+                      const SizedBox(height: 16),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -449,19 +561,53 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Widget _filterChip({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          gradient: isSelected
+              ? const LinearGradient(
+                  colors: [AppTheme.primary, AppTheme.primaryLight],
+                )
+              : null,
+          color: isSelected ? null : AppTheme.glassLight,
+          borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+          border: Border.all(
+            color: isSelected ? Colors.transparent : AppTheme.border,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.black : AppTheme.textPrimary,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showSort() {
     showModalBottomSheet(
       context: context,
       backgroundColor: AppTheme.card,
       shape: const RoundedRectangleBorder(
-        borderRadius:
-            BorderRadius.vertical(top: Radius.circular(AppTheme.radiusLg)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppTheme.radiusLg),
+        ),
       ),
       builder: (context) {
         return Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(20),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisSize: MainAxisSize.min, // ✅ compact sheet
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
@@ -489,6 +635,7 @@ class _HomePageState extends State<HomePage> {
     final isSelected = sortBy == value;
 
     return InkWell(
+      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
       onTap: () {
         setState(() => sortBy = value);
         Navigator.pop(context);
@@ -496,9 +643,11 @@ class _HomePageState extends State<HomePage> {
       },
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.glassStrong : AppTheme.glassLight,
+          color: isSelected
+              ? AppTheme.primary // ✅ gold highlight
+              : AppTheme.glassLight,
           borderRadius: BorderRadius.circular(AppTheme.radiusMd),
         ),
         child: Row(
@@ -507,19 +656,19 @@ class _HomePageState extends State<HomePage> {
               child: Text(
                 label,
                 style: TextStyle(
-                  color: isSelected ? AppTheme.primary : AppTheme.textPrimary,
+                  color: isSelected
+                      ? Colors.black // ✅ black text on gold
+                      : AppTheme.textPrimary,
+                  fontSize: 15,
                   fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                 ),
               ),
             ),
             if (isSelected)
-              Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  color: AppTheme.primary,
-                  shape: BoxShape.circle,
-                ),
+              const Icon(
+                Icons.check, // ✅ checkmark like screenshot
+                color: Colors.black,
+                size: 20,
               ),
           ],
         ),
