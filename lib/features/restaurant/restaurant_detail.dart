@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/theme/app_theme.dart';
 import '../../config/env_config.dart';
 import '../../shared/ui/invite_friends_modal.dart';
+import '../../shared/ui/group_mix_magic_dialog.dart';
 
 class RestaurantDetail extends StatefulWidget {
   final Map<String, dynamic> user;
