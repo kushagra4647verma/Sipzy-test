@@ -29,7 +29,7 @@ class _SocialPageState extends State<SocialPage>
   bool loading = true;
   bool hasError = false;
 
-  // User stats from badges table
+  // User stats
   Map<String, dynamic> stats = {
     'ratingsCount': 0,
     'friendsCount': 0,
@@ -60,8 +60,7 @@ class _SocialPageState extends State<SocialPage>
     final headers = {'Content-Type': 'application/json'};
 
     if (session?.accessToken != null) {
-      headers['Authorization'] = 'Bearer ${session!.accessToken}';
-      print('🔑 FULL TOKEN: ${session.accessToken}');
+      headers['Authorization'] = 'Bearer ${session?.accessToken}';
     }
 
     final effectiveUserId = user?.id ?? widget.user['id']?.toString();
@@ -80,85 +79,54 @@ class _SocialPageState extends State<SocialPage>
 
     try {
       final headers = await _getHeaders();
+      final userId =
+          _supabase.auth.currentUser?.id ?? widget.user['id']?.toString();
 
-      print('📡 Fetching social data with headers: ${headers.keys.join(", ")}');
+      print('📡 Fetching social data for user: $userId');
 
-      // Using correct endpoints matching backend routes
-      final responses = await Future.wait([
-        // GET /users/me - user profile + badge stats
-        http
-            .get(
-              Uri.parse('${EnvConfig.apiBaseUrl}/users/me'),
-              headers: headers,
-            )
-            .timeout(const Duration(seconds: 15)),
+      // Fetch data with proper error handling for each endpoint
+      final results = await Future.wait([
+        // Diary entries
+        _fetchWithFallback(
+          () => http.get(
+            Uri.parse('${EnvConfig.apiBaseUrl}/diary'),
+            headers: headers,
+          ),
+          'diary',
+        ),
 
-        // GET /diary - all diary entries for current user
-        http
-            .get(
-              Uri.parse('${EnvConfig.apiBaseUrl}/diary'),
-              headers: headers,
-            )
-            .timeout(const Duration(seconds: 15)),
+        // Bookmarks - try /bookmarks endpoint (no userId in path)
+        _fetchWithFallback(
+          () => http.get(
+            Uri.parse('${EnvConfig.apiBaseUrl}/bookmarks'),
+            headers: headers,
+          ),
+          'bookmarks',
+        ),
 
-        // GET /users/me/bookmarks - user bookmarks
-        http
-            .get(
-              Uri.parse('${EnvConfig.apiBaseUrl}/users/me/bookmarks'),
-              headers: headers,
-            )
-            .timeout(const Duration(seconds: 15)),
-
-        // GET /users/me/friends - user friends
-        http
-            .get(
-              Uri.parse('${EnvConfig.apiBaseUrl}/friends'),
-              headers: headers,
-            )
-            .timeout(const Duration(seconds: 15)),
+        // Friends
+        _fetchWithFallback(
+          () => http.get(
+            Uri.parse('${EnvConfig.apiBaseUrl}/friends'),
+            headers: headers,
+          ),
+          'friends',
+        ),
       ]);
-
-      // Check for auth error in any response
-      for (int i = 0; i < responses.length; i++) {
-        final res = responses[i];
-        print('Response $i status: ${res.statusCode}');
-        if (res.statusCode == 401) {
-          if (mounted) {
-            _toast('Session expired. Please login again.', isError: true);
-            context.go('/auth');
-          }
-          return;
-        }
-      }
 
       if (mounted) {
         setState(() {
-          // Parse user/stats data (from badges table)
-          final userData = _safeParseJson(responses[0].body, defaultValue: {});
+          diaryEntries = results[0];
+          bookmarks = results[1];
+          friends = results[2];
 
-          // Try to extract badge stats
-          final badges = userData['badges'] ?? {};
+          // Calculate stats from actual data
           stats = {
-            'ratingsCount': badges['ratingscount'] ??
-                badges['ratingsCount'] ??
-                userData['ratingscount'] ??
-                userData['ratingsCount'] ??
-                0,
-            'friendsCount': badges['friendscount'] ??
-                badges['friendsCount'] ??
-                userData['friendscount'] ??
-                userData['friendsCount'] ??
-                0,
-            'bookmarkCount': badges['bookmarkcount'] ??
-                badges['bookmarkCount'] ??
-                userData['bookmarkcount'] ??
-                userData['bookmarkCount'] ??
-                0,
+            'ratingsCount': diaryEntries.length,
+            'friendsCount': friends.length,
+            'bookmarkCount': bookmarks.length,
           };
 
-          diaryEntries = _safeParseArray(responses[1].body);
-          bookmarks = _safeParseArray(responses[2].body);
-          friends = _safeParseArray(responses[3].body);
           hasError = false;
         });
       }
@@ -181,13 +149,34 @@ class _SocialPageState extends State<SocialPage>
     }
   }
 
-  dynamic _safeParseJson(String body, {dynamic defaultValue}) {
+  /// Fetch with fallback - returns empty list on error
+  Future<List> _fetchWithFallback(
+    Future<http.Response> Function() fetchFn,
+    String endpoint,
+  ) async {
     try {
-      final data = jsonDecode(body);
-      return data['success'] == true ? (data['data'] ?? defaultValue) : data;
+      final response = await fetchFn().timeout(const Duration(seconds: 15));
+
+      print('📡 $endpoint status: ${response.statusCode}');
+
+      if (response.statusCode == 401) {
+        if (mounted) {
+          _toast('Session expired. Please login again.', isError: true);
+          context.go('/auth');
+        }
+        return [];
+      }
+
+      if (response.statusCode == 200) {
+        return _safeParseArray(response.body);
+      }
+
+      // Non-200 status - log and return empty
+      print('⚠️ $endpoint returned ${response.statusCode}');
+      return [];
     } catch (e) {
-      print('JSON parse error: $e');
-      return defaultValue;
+      print('⚠️ Error fetching $endpoint: $e');
+      return [];
     }
   }
 
@@ -224,7 +213,6 @@ class _SocialPageState extends State<SocialPage>
     try {
       final headers = await _getHeaders();
 
-      // POST /diary - backend route
       final response = await http
           .post(
             Uri.parse('${EnvConfig.apiBaseUrl}/diary'),
@@ -265,7 +253,6 @@ class _SocialPageState extends State<SocialPage>
     try {
       final headers = await _getHeaders();
 
-      // PATCH /diary/:entryId
       final response = await http
           .patch(
             Uri.parse('${EnvConfig.apiBaseUrl}/diary/$entryId'),
@@ -300,7 +287,6 @@ class _SocialPageState extends State<SocialPage>
     try {
       final headers = await _getHeaders();
 
-      // DELETE /diary/:entryId
       final response = await http
           .delete(
             Uri.parse('${EnvConfig.apiBaseUrl}/diary/$entryId'),
@@ -333,6 +319,8 @@ class _SocialPageState extends State<SocialPage>
   Future<void> toggleBookmark(String restaurantId) async {
     try {
       final headers = await _getHeaders();
+      final userId =
+          _supabase.auth.currentUser?.id ?? widget.user['id']?.toString();
 
       final isCurrentlyBookmarked = bookmarks.any(
         (b) =>
@@ -344,18 +332,18 @@ class _SocialPageState extends State<SocialPage>
       http.Response response;
 
       if (isCurrentlyBookmarked) {
-        // DELETE /bookmarks/:restaurantId
         response = await http
             .delete(
-              Uri.parse('${EnvConfig.apiBaseUrl}/bookmarks/$restaurantId'),
+              Uri.parse(
+                  '${EnvConfig.apiBaseUrl}/users/$userId/bookmarks/$restaurantId'),
               headers: headers,
             )
             .timeout(const Duration(seconds: 15));
       } else {
-        // POST /bookmarks/:restaurantId
         response = await http
             .post(
-              Uri.parse('${EnvConfig.apiBaseUrl}/bookmarks/$restaurantId'),
+              Uri.parse(
+                  '${EnvConfig.apiBaseUrl}/users/$userId/bookmarks/$restaurantId'),
               headers: headers,
             )
             .timeout(const Duration(seconds: 15));
@@ -647,7 +635,7 @@ class _SocialPageState extends State<SocialPage>
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           Text(
-            widget.user['phone'] ?? '',
+            widget.user['phone'] ?? widget.user['email'] ?? '',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 12),
@@ -693,8 +681,32 @@ class _SocialPageState extends State<SocialPage>
   Widget _diaryTab() {
     if (diaryEntries.isEmpty) {
       return Center(
-        child: Text('No diary entries yet',
-            style: Theme.of(context).textTheme.bodySmall),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.book_outlined,
+                  size: 64,
+                  color: AppTheme.textTertiary,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No diary entries yet',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Tap + to add your first entry',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
@@ -703,7 +715,7 @@ class _SocialPageState extends State<SocialPage>
       itemCount: diaryEntries.length,
       itemBuilder: (_, i) {
         final entry = diaryEntries[i];
-        final entryId = entry['entryid'] ?? entry['entryId'];
+        final entryId = entry['entryid'] ?? entry['entryId'] ?? entry['id'];
         final bevName = entry['bevname'] ?? entry['bevName'] ?? 'Unknown';
         final restaurant = entry['restaurant'] ?? '';
         final rating = entry['rating'] ?? 0;
@@ -761,7 +773,7 @@ class _SocialPageState extends State<SocialPage>
                 const Icon(Icons.star, color: AppTheme.primary, size: 16),
                 IconButton(
                   icon: const Icon(Icons.delete, color: Colors.red, size: 20),
-                  onPressed: () => deleteDiary(entryId),
+                  onPressed: () => deleteDiary(entryId.toString()),
                 ),
               ],
             ),
@@ -774,8 +786,32 @@ class _SocialPageState extends State<SocialPage>
   Widget _savesTab() {
     if (bookmarks.isEmpty) {
       return Center(
-        child: Text('No bookmarks yet',
-            style: Theme.of(context).textTheme.bodySmall),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.bookmark_border_rounded,
+                  size: 64,
+                  color: AppTheme.textTertiary,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No bookmarks yet',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Save your favorite places',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
@@ -785,7 +821,7 @@ class _SocialPageState extends State<SocialPage>
       itemBuilder: (_, i) {
         final bookmark = bookmarks[i];
         final name = bookmark['name'] ?? 'Restaurant';
-        final address = bookmark['address'] ?? '';
+        final address = bookmark['address'] ?? bookmark['area'] ?? '';
         final logoImage = bookmark['logoimage'] ?? bookmark['logoImage'];
 
         return Card(
@@ -824,8 +860,32 @@ class _SocialPageState extends State<SocialPage>
   Widget _friendsTab() {
     if (friends.isEmpty) {
       return Center(
-        child: Text('No friends yet',
-            style: Theme.of(context).textTheme.bodySmall),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.people_outline_rounded,
+                  size: 64,
+                  color: AppTheme.textTertiary,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No friends yet',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Connect with other SipZy users',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 

@@ -87,8 +87,24 @@ class AuthService {
 
       if (response.session != null) {
         final user = response.user;
-        final profile = await _getUserProfile(user!.id);
-        final isNew = profile == null;
+
+        if (user == null) {
+          return {
+            'success': false,
+            'message': 'No user returned from verification',
+          };
+        }
+
+        // ✅ CRITICAL FIX: Check if profile exists
+        final profile = await _getUserProfile(user.id);
+
+        // ✅ User is new if profile doesn't exist OR if profile has no name
+        final isNew = profile == null ||
+            profile['name'] == null ||
+            profile['name'].toString().isEmpty;
+
+        print(
+            '🔍 Profile check - User ID: ${user.id}, Profile exists: ${profile != null}, Is new: $isNew');
 
         return {
           'success': true,
@@ -123,17 +139,27 @@ class AuthService {
   }
 
   /// Get user profile from custom users table
+  /// ✅ FIX: Added better error handling and null checks
   Future<Map<String, dynamic>?> _getUserProfile(String userId) async {
     try {
+      print('🔍 Checking profile for user: $userId');
+
       final response = await _supabase
           .from('profiles')
           .select()
           .eq('id', userId)
           .maybeSingle();
 
+      if (response == null) {
+        print('✅ No profile found - user is new');
+        return null;
+      }
+
+      print('✅ Profile found: ${response['name']}');
       return response;
     } catch (e) {
-      print('Profile not found for user $userId');
+      print('⚠️ Error fetching profile for user $userId: $e');
+      // If there's an error fetching profile, assume user is new
       return null;
     }
   }
@@ -159,12 +185,9 @@ class AuthService {
         };
       }
 
-      // Create user profile in profiles table
-      // Note: You may need to add additional columns to your profiles table:
-      // - dob (date)
-      // - city (text)
-      // Or create a separate user_preferences table for extended data
+      print('📝 Creating profile for user: $userId');
 
+      // Create user profile in profiles table
       final profileData = {
         'id': userId,
         'name': name,
@@ -174,12 +197,13 @@ class AuthService {
 
       final response = await _supabase
           .from('profiles')
-          .insert(profileData)
+          .upsert(profileData) // ✅ Changed to upsert to handle any edge cases
           .select()
           .single();
 
+      print('✅ Profile created successfully');
+
       // Store additional metadata
-      // Option 1: Update user metadata in auth.users
       await _supabase.auth.updateUser(
         UserAttributes(
           data: {
@@ -193,15 +217,7 @@ class AuthService {
         ),
       );
 
-      // Option 2: Create a user_preferences table (recommended for production)
-      // await _supabase.from('user_preferences').insert({
-      //   'userId': userId,
-      //   'dob': dob,
-      //   'city': city,
-      //   'enableLocation': enableLocation,
-      //   'enableNotifications': enableNotifications,
-      //   'enableSocialFeatures': enableSocialFeatures,
-      // });
+      print('✅ User metadata updated');
 
       return {
         'success': true,
