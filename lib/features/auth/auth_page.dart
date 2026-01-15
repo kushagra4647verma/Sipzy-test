@@ -1,7 +1,6 @@
 // lib/features/auth/auth_page.dart
 import 'package:flutter/material.dart';
 import '../../core/theme/colors.dart';
-import '../../core/theme/radius.dart';
 import '../../services/auth_service.dart';
 
 enum AuthStep { phone, otp, signup }
@@ -23,8 +22,16 @@ class _AuthPageState extends State<AuthPage> {
   String phone = '';
   String otp = '';
   String name = '';
-  String age = '';
+  String email = '';
+  String dob = '';
+  String city = '';
+  bool enableLocation = false;
   bool agreedToTerms = false;
+  bool agreedToPrivacy = false;
+  bool confirmedAge = false;
+  bool confirmedAlcoholConsent = false;
+  bool enableNotifications = false;
+  bool enableSocialFeatures = false;
   bool loading = false;
 
   // Store dev OTP to display it
@@ -34,7 +41,63 @@ class _AuthPageState extends State<AuthPage> {
   final _phoneController = TextEditingController();
   final _otpController = TextEditingController();
   final _nameController = TextEditingController();
-  final _ageController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _dobController = TextEditingController();
+  final _cityController = TextEditingController();
+
+  // Indian cities list
+  final List<String> _indianCities = [
+    'Mumbai',
+    'Delhi',
+    'Bangalore',
+    'Hyderabad',
+    'Chennai',
+    'Kolkata',
+    'Pune',
+    'Ahmedabad',
+    'Jaipur',
+    'Surat',
+    'Lucknow',
+    'Kanpur',
+    'Nagpur',
+    'Indore',
+    'Thane',
+    'Bhopal',
+    'Visakhapatnam',
+    'Pimpri-Chinchwad',
+    'Patna',
+    'Vadodara',
+    'Ghaziabad',
+    'Ludhiana',
+    'Agra',
+    'Nashik',
+    'Faridabad',
+    'Meerut',
+    'Rajkot',
+    'Kalyan-Dombivali',
+    'Vasai-Virar',
+    'Varanasi',
+    'Srinagar',
+    'Aurangabad',
+    'Dhanbad',
+    'Amritsar',
+    'Navi Mumbai',
+    'Allahabad',
+    'Ranchi',
+    'Howrah',
+    'Coimbatore',
+    'Jabalpur',
+    'Gwalior',
+    'Vijayawada',
+    'Jodhpur',
+    'Madurai',
+    'Raipur',
+    'Kota',
+    'Chandigarh',
+    'Guwahati',
+    'Mysore',
+    'Other',
+  ];
 
   @override
   void dispose() {
@@ -42,7 +105,9 @@ class _AuthPageState extends State<AuthPage> {
     _phoneController.dispose();
     _otpController.dispose();
     _nameController.dispose();
-    _ageController.dispose();
+    _emailController.dispose();
+    _dobController.dispose();
+    _cityController.dispose();
     super.dispose();
   }
 
@@ -133,7 +198,9 @@ class _AuthPageState extends State<AuthPage> {
           setState(() {
             step = AuthStep.signup;
             _nameController.clear(); // Clear signup fields
-            _ageController.clear();
+            _emailController.clear();
+            _dobController.clear();
+            _cityController.clear();
           });
         } else {
           widget.onLogin({
@@ -156,7 +223,9 @@ class _AuthPageState extends State<AuthPage> {
   Future<void> signup() async {
     // Validate all fields
     final trimmedName = name.trim();
-    final trimmedAge = age.trim();
+    final trimmedEmail = email.trim();
+    final trimmedDob = dob.trim();
+    final trimmedCity = city.trim();
 
     if (trimmedName.isEmpty) {
       _toast('Please enter your full name', error: true);
@@ -168,24 +237,39 @@ class _AuthPageState extends State<AuthPage> {
       return;
     }
 
-    if (trimmedAge.isEmpty) {
-      _toast('Please enter your age', error: true);
+    if (trimmedEmail.isEmpty) {
+      _toast('Please enter your email address', error: true);
       return;
     }
 
-    final ageInt = int.tryParse(trimmedAge);
-    if (ageInt == null) {
-      _toast('Please enter a valid age', error: true);
+    // Email validation
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    if (!emailRegex.hasMatch(trimmedEmail)) {
+      _toast('Please enter a valid email address', error: true);
       return;
     }
 
-    if (ageInt < 23) {
-      _toast('You must be 23 years or older to use SipZy', error: true);
+    if (trimmedDob.isEmpty) {
+      _toast('Please select your date of birth', error: true);
       return;
     }
 
-    if (ageInt > 120) {
-      _toast('Please enter a valid age', error: true);
+    // Validate age (must be 25+)
+    final dobDate = DateTime.parse(trimmedDob);
+    final age = DateTime.now().difference(dobDate).inDays ~/ 365;
+
+    if (age < 25) {
+      _toast('You must be 25 years or older to use SipZy', error: true);
+      return;
+    }
+
+    if (age > 120) {
+      _toast('Please enter a valid date of birth', error: true);
+      return;
+    }
+
+    if (!confirmedAge) {
+      _toast('Please confirm you are 25 years of age or older', error: true);
       return;
     }
 
@@ -194,14 +278,32 @@ class _AuthPageState extends State<AuthPage> {
       return;
     }
 
+    if (!agreedToPrivacy) {
+      _toast('Please agree to the Privacy Policy', error: true);
+      return;
+    }
+
+    if (!confirmedAlcoholConsent) {
+      _toast(
+          'Please confirm you are legally permitted to view alcohol-related content',
+          error: true);
+      return;
+    }
+
     setState(() => loading = true);
 
     try {
-      print('👤 Signing up: $trimmedName, age: $ageInt, phone: +91$phone');
+      print(
+          '👤 Signing up: $trimmedName, email: $trimmedEmail, dob: $trimmedDob, phone: +91$phone');
       final result = await _authService.signUp(
         name: trimmedName,
-        age: ageInt,
+        email: trimmedEmail,
+        dob: trimmedDob,
+        city: trimmedCity,
         phone: phone,
+        enableLocation: enableLocation,
+        enableNotifications: enableNotifications,
+        enableSocialFeatures: enableSocialFeatures,
       );
       print('✅ Signup Response: $result');
 
@@ -219,6 +321,42 @@ class _AuthPageState extends State<AuthPage> {
       _toast('Signup failed: ${e.toString()}', error: true);
     } finally {
       setState(() => loading = false);
+    }
+  }
+
+  Future<void> _selectDate() async {
+    // Calculate date 25 years ago from today
+    final now = DateTime.now();
+    final initialDate = DateTime(now.year - 25, now.month, now.day);
+    final firstDate = DateTime(now.year - 100, 1, 1);
+    final lastDate = DateTime(now.year - 25, now.month, now.day);
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: firstDate,
+      lastDate: lastDate,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.dark(
+              primary: AppColors.primary,
+              onPrimary: Colors.black,
+              surface: const Color(0xFF2A2A2A),
+              onSurface: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        dob = picked.toIso8601String().split('T')[0];
+        _dobController.text =
+            '${picked.day.toString().padLeft(2, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.year}';
+      });
     }
   }
 
@@ -245,7 +383,7 @@ class _AuthPageState extends State<AuthPage> {
                 const SizedBox(height: 32),
                 _authCard(),
                 const SizedBox(height: 16),
-                _termsText(),
+                if (step != AuthStep.signup) _termsText(),
               ],
             ),
           ),
@@ -552,48 +690,549 @@ class _AuthPageState extends State<AuthPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Create Account',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          'Create Your Account',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'Complete your profile to get started',
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.white60,
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // Profile Photo (Optional) - Circular placeholder
+        Center(
+          child: Stack(
+            children: [
+              Container(
+                width: 100,
+                height: 100,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF3A3A3A),
+                  border: Border.all(
+                    color: const Color(0xFF4A4A4A),
+                    width: 2,
+                  ),
+                ),
+                child: const Icon(
+                  Icons.camera_alt,
+                  color: Colors.white38,
+                  size: 32,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Center(
+          child: Text(
+            'Profile Photo (Optional)',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.white54,
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 24),
+
+        // Personal Information Section
+        Row(
+          children: const [
+            Icon(Icons.person, color: Color(0xFFF5B642), size: 18),
+            SizedBox(width: 8),
+            Text(
+              'Personal Information',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 16,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
+
+        // Full Name
+        _buildLabel('Full Name', required: true),
+        const SizedBox(height: 8),
         TextField(
           controller: _nameController,
-          decoration: const InputDecoration(
-            labelText: 'Full Name',
-            helperText: 'Enter your full name',
-          ),
           onChanged: (v) => name = v,
           textCapitalization: TextCapitalization.words,
+          style: const TextStyle(color: Colors.white),
+          decoration: _inputDecoration('Aumita'),
         ),
-        const SizedBox(height: 12),
+
+        const SizedBox(height: 16),
+
+        // Phone Number (Read-only)
+        _buildLabel('Phone Number', required: true),
+        const SizedBox(height: 8),
         TextField(
-          controller: _ageController,
-          decoration: const InputDecoration(
-            labelText: 'Age (23+)',
-            helperText: 'You must be 23 or older',
-          ),
-          keyboardType: TextInputType.number,
-          maxLength: 3,
-          onChanged: (v) => age = v,
+          controller: TextEditingController(text: phone),
+          enabled: false,
+          style: const TextStyle(color: Colors.white54),
+          decoration: _inputDecoration('9988988988'),
         ),
-        const SizedBox(height: 12),
-        CheckboxListTile(
-          value: agreedToTerms,
-          onChanged: (v) => setState(() => agreedToTerms = v ?? false),
-          title: const Text(
-            'I agree to the Terms & Conditions and confirm I am 23+',
-          ),
-          controlAffinity: ListTileControlAffinity.leading,
+
+        const SizedBox(height: 16),
+
+        // Email Address
+        _buildLabel('Email Address', required: true),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _emailController,
+          onChanged: (v) => email = v,
+          keyboardType: TextInputType.emailAddress,
+          style: const TextStyle(color: Colors.white),
+          decoration: _inputDecoration('test@gmail.com')
+              .copyWith(helperText: 'Used for account recovery & updates'),
+        ),
+
+        const SizedBox(height: 16),
+
+        // City Dropdown
+        _buildLabel('City', required: false),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: city.isEmpty ? null : city,
+          items: _indianCities.map((cityName) {
+            return DropdownMenuItem(
+              value: cityName,
+              child: Text(cityName),
+            );
+          }).toList(),
+          onChanged: (value) {
+            setState(() {
+              city = value ?? '';
+            });
+          },
+          style: const TextStyle(color: Colors.white),
+          dropdownColor: const Color(0xFF3A3A3A),
+          decoration: _inputDecoration('Select your city'),
+        ),
+
+        const SizedBox(height: 20),
+
+        // Age Verification Section
+        Row(
+          children: const [
+            Icon(Icons.verified_user, color: Color(0xFFF5B642), size: 18),
+            SizedBox(width: 8),
+            Text(
+              'Age Verification (Required)',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 16,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
+
+        // Date of Birth
+        _buildLabel('Date of birth', required: true),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: _selectDate,
+          child: AbsorbPointer(
+            child: TextField(
+              controller: _dobController,
+              style: const TextStyle(color: Colors.white),
+              decoration: _inputDecoration('dd-mm-yyyy')
+                  .copyWith(suffixIcon: const Icon(Icons.calendar_today)),
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // Age Confirmation Checkbox
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF3A3A3A),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: Checkbox(
+                  value: confirmedAge,
+                  onChanged: (v) => setState(() => confirmedAge = v ?? false),
+                  activeColor: const Color(0xFFF5B642),
+                  checkColor: Colors.black,
+                  side: const BorderSide(color: Colors.white38),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: RichText(
+                  text: const TextSpan(
+                    style: TextStyle(color: Colors.white, fontSize: 14),
+                    children: [
+                      TextSpan(text: 'I confirm that I am '),
+                      TextSpan(
+                        text: '25 years of age or older',
+                        style: TextStyle(color: Color(0xFFF5B642)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 20),
+
+        // Location Section
+        Row(
+          children: const [
+            Icon(Icons.location_on, color: Color(0xFFF5B642), size: 18),
+            SizedBox(width: 8),
+            Text(
+              'Location (Optional)',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // Enable Location
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF3A3A3A),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.my_location, color: Colors.white70, size: 20),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Enable Location',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'For nearby restaurant discovery',
+                      style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: enableLocation,
+                onChanged: (v) => setState(() => enableLocation = v),
+                activeColor: const Color(0xFFF5B642),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 20),
+
+        // Legal Consents Section
+        Row(
+          children: const [
+            Icon(Icons.gavel, color: Color(0xFFF5B642), size: 18),
+            SizedBox(width: 8),
+            Text(
+              'Legal Consents (Required)',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // Terms & Conditions
+        _buildConsentCheckbox(
+          value: agreedToTerms,
+          onChanged: (v) => setState(() => agreedToTerms = v ?? false),
+          text: 'I agree to the ',
+          linkText: 'Terms & Conditions',
+          onLinkTap: () {
+            // TODO: Open T&C
+          },
+        ),
+
+        const SizedBox(height: 12),
+
+        // Privacy Policy
+        _buildConsentCheckbox(
+          value: agreedToPrivacy,
+          onChanged: (v) => setState(() => agreedToPrivacy = v ?? false),
+          text: 'I agree to the ',
+          linkText: 'Privacy Policy',
+          onLinkTap: () {
+            // TODO: Open Privacy Policy
+          },
+        ),
+
+        const SizedBox(height: 12),
+
+        // Alcohol Consent
+        _buildConsentCheckbox(
+          value: confirmedAlcoholConsent,
+          onChanged: (v) =>
+              setState(() => confirmedAlcoholConsent = v ?? false),
+          text:
+              'I confirm that I am legally permitted to view alcohol-related content in my location',
+          isLongText: true,
+        ),
+
+        const SizedBox(height: 20),
+
+        // Optional Preferences Section
+        Row(
+          children: const [
+            Icon(Icons.tune, color: Color(0xFFF5B642), size: 18),
+            SizedBox(width: 8),
+            Text(
+              'Optional Preferences',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // Receive Notifications
+        _buildPreferenceCheckbox(
+          value: enableNotifications,
+          onChanged: (v) => setState(() => enableNotifications = v ?? false),
+          title: 'Receive notifications',
+          subtitle: 'Events, games & updates',
+        ),
+
+        const SizedBox(height: 12),
+
+        // Enable Social Features
+        _buildPreferenceCheckbox(
+          value: enableSocialFeatures,
+          onChanged: (v) => setState(() => enableSocialFeatures = v ?? false),
+          title: 'Enable social features',
+          subtitle: 'Friends, invites, sharing',
+        ),
+
+        const SizedBox(height: 24),
+
+        // Continue Button
         SizedBox(
           width: double.infinity,
+          height: 52,
           child: ElevatedButton(
             onPressed: loading ? null : signup,
-            child: Text(loading ? 'Creating Account…' : 'Get Started'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFF5B642),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(26),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  loading ? 'Creating Account…' : 'Continue to SipZy',
+                  style: const TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                if (!loading) ...[
+                  const SizedBox(width: 8),
+                  const Icon(Icons.arrow_forward,
+                      color: Colors.black, size: 20),
+                ],
+              ],
+            ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildLabel(String text, {bool required = false}) {
+    return Row(
+      children: [
+        Text(
+          text,
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        if (required)
+          const Text(
+            ' *',
+            style: TextStyle(color: Colors.red, fontSize: 14),
+          ),
+      ],
+    );
+  }
+
+  InputDecoration _inputDecoration(String hint) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: const TextStyle(color: Colors.white38),
+      filled: true,
+      fillColor: const Color(0xFF3A3A3A),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      helperStyle: const TextStyle(color: Colors.white54, fontSize: 12),
+    );
+  }
+
+  Widget _buildConsentCheckbox({
+    required bool value,
+    required Function(bool?) onChanged,
+    required String text,
+    String? linkText,
+    VoidCallback? onLinkTap,
+    bool isLongText = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF3A3A3A),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 24,
+            height: 24,
+            child: Checkbox(
+              value: value,
+              onChanged: onChanged,
+              activeColor: const Color(0xFFF5B642),
+              checkColor: Colors.black,
+              side: const BorderSide(color: Colors.white38),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: linkText != null
+                ? RichText(
+                    text: TextSpan(
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                      children: [
+                        TextSpan(text: text),
+                        WidgetSpan(
+                          child: GestureDetector(
+                            onTap: onLinkTap,
+                            child: Text(
+                              linkText,
+                              style: const TextStyle(
+                                color: Color(0xFFF5B642),
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : Text(
+                    text,
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPreferenceCheckbox({
+    required bool value,
+    required Function(bool?) onChanged,
+    required String title,
+    required String subtitle,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF3A3A3A),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 24,
+            height: 24,
+            child: Checkbox(
+              value: value,
+              onChanged: onChanged,
+              activeColor: const Color(0xFFF5B642),
+              checkColor: Colors.black,
+              side: const BorderSide(color: Colors.white38),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: Colors.white54,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

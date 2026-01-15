@@ -6,18 +6,7 @@ import '../config/env_config.dart';
 
 class AuthService {
   final _supabase = Supabase.instance.client;
-  String name = '';
-  String phone = '';
-  String email = '';
-  String dob = '';
-  String city = '';
-  bool enableLocation = false;
-  bool agreedToTerms = false;
-  bool agreedToPrivacy = false;
-  bool confirmedAge = false;
-  bool enableNotifications = false;
-  bool enableSocialFeatures = false;
-  bool loading = false;
+
   // Toggle this for production
   static const bool USE_DEV_MODE = true;
 
@@ -149,7 +138,7 @@ class AuthService {
     }
   }
 
-  /// Sign up new user with profile data
+  /// Sign up new user with comprehensive profile data
   Future<Map<String, dynamic>> signUp({
     required String name,
     required String email,
@@ -170,23 +159,57 @@ class AuthService {
         };
       }
 
-      // Create user profile in your custom users table
+      // Create user profile in profiles table
+      // Note: You may need to add additional columns to your profiles table:
+      // - dob (date)
+      // - city (text)
+      // Or create a separate user_preferences table for extended data
+
+      final profileData = {
+        'id': userId,
+        'name': name,
+        'email': email,
+        'phone': phone,
+      };
+
       final response = await _supabase
           .from('profiles')
-          .insert({
-            'id': userId,
-            'name': name,
-            'email': email,
-            'phone': phone,
-            // Store additional info as metadata or in separate fields
-            // You may need to add these columns to your profiles table
-          })
+          .insert(profileData)
           .select()
           .single();
 
+      // Store additional metadata
+      // Option 1: Update user metadata in auth.users
+      await _supabase.auth.updateUser(
+        UserAttributes(
+          data: {
+            'dob': dob,
+            'city': city.isNotEmpty ? city : null,
+            'enableLocation': enableLocation,
+            'enableNotifications': enableNotifications,
+            'enableSocialFeatures': enableSocialFeatures,
+            'onboarding_completed': true,
+          },
+        ),
+      );
+
+      // Option 2: Create a user_preferences table (recommended for production)
+      // await _supabase.from('user_preferences').insert({
+      //   'userId': userId,
+      //   'dob': dob,
+      //   'city': city,
+      //   'enableLocation': enableLocation,
+      //   'enableNotifications': enableNotifications,
+      //   'enableSocialFeatures': enableSocialFeatures,
+      // });
+
       return {
         'success': true,
-        'user': response,
+        'user': {
+          ...response,
+          'dob': dob,
+          'city': city,
+        },
         'token': _supabase.auth.currentSession?.accessToken,
       };
     } catch (e) {
