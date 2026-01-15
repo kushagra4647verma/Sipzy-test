@@ -12,6 +12,7 @@ import 'features/restaurant/restaurant_detail.dart';
 import 'features/beverage/beverage_detail_page.dart';
 import 'features/events/events_page.dart';
 import 'features/social/social_page.dart';
+import 'features/expert/expert_page.dart';
 
 // Expert
 import 'features/expert/expert_dashboard.dart';
@@ -129,6 +130,11 @@ class _SipZyAppState extends State<SipZyApp> {
           user: auth.user!,
           restaurantId: state.pathParameters['id']!,
         ),
+      ),
+      GoRoute(
+        path: '/expert-corner',
+        name: 'expert-corner',
+        builder: (context, state) => ExpertCornerPage(user: auth.user!),
       ),
       GoRoute(
         path: '/beverage/:id',

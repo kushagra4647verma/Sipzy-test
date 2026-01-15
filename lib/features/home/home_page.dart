@@ -743,7 +743,7 @@ class _HomePageState extends State<HomePage> {
 
               // Expert Corner Button
               InkWell(
-                onTap: () => context.push('/expert'),
+                onTap: () => context.push('/expert-corner'),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
