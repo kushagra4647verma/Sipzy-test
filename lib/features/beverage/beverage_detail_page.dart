@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
+import '../../shared/ui/share_modal.dart';
 import '../../core/theme/app_theme.dart';
 import '../../config/env_config.dart';
 
@@ -531,27 +531,63 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
   Widget _buildActionsSection() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: SizedBox(
-        width: double.infinity,
-        height: 48,
-        child: AppTheme.gradientButtonAmber(
-          onPressed: () => setState(() => showRatingDialog = true),
-          child: const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.star_rounded, size: 20, color: Colors.black),
-              SizedBox(width: 8),
-              Text(
-                'Add Rating',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black,
+      child: Row(
+        children: [
+          Expanded(
+            child: SizedBox(
+              height: 48,
+              child: AppTheme.gradientButtonAmber(
+                onPressed: () => setState(() => showRatingDialog = true),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.star_rounded, size: 20, color: Colors.black),
+                    SizedBox(width: 8),
+                    Text(
+                      'Add Rating',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
-        ),
+          const SizedBox(width: 12),
+          InkWell(
+            onTap: () {
+              showDialog(
+                context: context,
+                builder: (context) => ShareModal(
+                  open: true,
+                  onClose: () => Navigator.pop(context),
+                  item: {
+                    'title': beverage!['name'] ?? 'Beverage',
+                    'description': 'Check out this beverage on SipZy!',
+                    'url': 'https://sipzy.co.in/beverage/${widget.beverageId}',
+                  },
+                ),
+              );
+            },
+            child: Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: AppTheme.glassLight,
+                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                border: Border.all(color: AppTheme.border),
+              ),
+              child: const Icon(
+                Icons.share_rounded,
+                color: AppTheme.primary,
+                size: 20,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

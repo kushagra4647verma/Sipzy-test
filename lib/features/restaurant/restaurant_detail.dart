@@ -9,6 +9,7 @@ import '../../core/theme/app_theme.dart';
 import '../../config/env_config.dart';
 import '../../shared/ui/invite_friends_modal.dart';
 import '../../shared/ui/group_mix_magic_dialog.dart';
+import '../../shared/ui/share_modal.dart';
 
 class RestaurantDetail extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -414,6 +415,7 @@ class _RestaurantDetailState extends State<RestaurantDetail>
               _buildEventsSection(),
               _buildExpertRecommendationsSection(),
               _buildToggleSearchSort(),
+              _buildActionButtons(), // ✅ ADDED: Action buttons with Mix Magic
               _buildBeveragesGrid(),
               const SizedBox(height: 80),
             ],
@@ -427,6 +429,104 @@ class _RestaurantDetailState extends State<RestaurantDetail>
               user: widget.user,
               restaurant: restaurant!,
             ),
+        ],
+      ),
+    );
+  }
+
+  // ✅ NEW METHOD: Action buttons section
+  Widget _buildActionButtons() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      child: Row(
+        children: [
+          // Mix Magic Button
+          Expanded(
+            flex: 2,
+            child: InkWell(
+              onTap: () {
+                if (filteredBeverages.isEmpty) {
+                  _toast('No beverages available for Mix Magic', isError: true);
+                  return;
+                }
+
+                showDialog(
+                  context: context,
+                  builder: (context) => GroupMixMagicDialog(
+                    beverages: filteredBeverages,
+                    restaurant: restaurant!,
+                  ),
+                );
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [AppTheme.secondary, AppTheme.secondaryLight],
+                  ),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.secondary.withOpacity(0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(Icons.auto_awesome_rounded,
+                        color: Colors.white, size: 20),
+                    SizedBox(width: 8),
+                    Text(
+                      'Group Mix Magic',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 12),
+
+          // Share Restaurant Button
+          InkWell(
+            onTap: () {
+              showDialog(
+                context: context,
+                builder: (context) => ShareModal(
+                  open: true,
+                  onClose: () => Navigator.pop(context),
+                  item: {
+                    'title': restaurant!['name'] ?? 'Restaurant',
+                    'description':
+                        'Check out this amazing restaurant on SipZy!',
+                    'url':
+                        'https://sipzy.co.in/restaurant/${widget.restaurantId}',
+                  },
+                ),
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppTheme.glassLight,
+                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                border: Border.all(color: AppTheme.border),
+              ),
+              child: const Icon(
+                Icons.share_rounded,
+                color: AppTheme.primary,
+                size: 20,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -1171,37 +1271,60 @@ class _RestaurantDetailState extends State<RestaurantDetail>
                         )
                       : _buildBeveragePlaceholder(),
                 ),
-                // Camera & Share icons
+                // ✅ UPDATED: Functional Camera & Share icons
                 Positioned(
                   top: 8,
                   right: 8,
                   child: Row(
                     children: [
-                      Container(
-                        width: 28,
-                        height: 28,
-                        decoration: const BoxDecoration(
-                          color: Colors.black54,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.camera_alt_rounded,
-                          color: Colors.white,
-                          size: 14,
+                      GestureDetector(
+                        onTap: () {
+                          _toast('Photo upload coming soon');
+                        },
+                        child: Container(
+                          width: 28,
+                          height: 28,
+                          decoration: const BoxDecoration(
+                            color: Colors.black54,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.camera_alt_rounded,
+                            color: Colors.white,
+                            size: 14,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 6),
-                      Container(
-                        width: 28,
-                        height: 28,
-                        decoration: const BoxDecoration(
-                          color: Colors.black54,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.share_rounded,
-                          color: Colors.white,
-                          size: 14,
+                      GestureDetector(
+                        onTap: () {
+                          showDialog(
+                            context: context,
+                            builder: (context) => ShareModal(
+                              open: true,
+                              onClose: () => Navigator.pop(context),
+                              item: {
+                                'title': bev['name'] ?? 'Beverage',
+                                'description':
+                                    'Found this amazing drink at ${restaurant!['name']}!',
+                                'url':
+                                    'https://sipzy.co.in/beverage/${bev['id']}',
+                              },
+                            ),
+                          );
+                        },
+                        child: Container(
+                          width: 28,
+                          height: 28,
+                          decoration: const BoxDecoration(
+                            color: Colors.black54,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.share_rounded,
+                            color: Colors.white,
+                            size: 14,
+                          ),
                         ),
                       ),
                     ],
