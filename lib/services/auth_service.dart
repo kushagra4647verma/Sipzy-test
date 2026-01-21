@@ -11,44 +11,66 @@ class AuthService {
   static const bool USE_DEV_MODE = true;
 
   /// Send OTP via Supabase Auth (uses MessageBot)
+  /// ✅ FIXED: Using correct endpoint format matching working frontend
   Future<Map<String, dynamic>> sendOtp(String phone) async {
     try {
-      await _supabase.auth.signInWithOtp(
-        phone: '+91$phone',
-      );
+      // Clean and format phone number
+      final cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
+      final fullPhone = '+91$cleanPhone';
 
-      print('📱 OTP sent to +91$phone');
+      print('📱 Sending OTP to: $fullPhone');
 
-      // In dev mode, fetch the OTP from backend
-      if (USE_DEV_MODE) {
-        await Future.delayed(
-            const Duration(seconds: 1)); // Wait for OTP to be stored
+      // ✅ FIXED: Direct HTTP call to match working frontend
+      final response = await http
+          .post(
+            Uri.parse('${EnvConfig.supabaseUrl}/auth/v1/otp'),
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': EnvConfig.supabaseAnonKey,
+            },
+            body: jsonEncode({
+              'phone': fullPhone,
+              'create_user': true,
+            }),
+          )
+          .timeout(EnvConfig.requestTimeout);
 
-        try {
-          final devOtp = await _getDevOtp(phone);
-          if (devOtp != null) {
-            print('🔧 DEV OTP retrieved: $devOtp');
-            return {
-              'success': true,
-              'message': 'OTP sent successfully',
-              'dev_otp': devOtp,
-            };
+      print('📱 OTP Response Status: ${response.statusCode}');
+      print('📱 OTP Response Body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        // In dev mode, fetch the OTP from backend
+        if (USE_DEV_MODE) {
+          await Future.delayed(
+              const Duration(seconds: 2)); // Wait for OTP to be stored
+
+          try {
+            final devOtp = await _getDevOtp(fullPhone);
+            if (devOtp != null) {
+              print('🔧 DEV OTP retrieved: $devOtp');
+              return {
+                'success': true,
+                'message': 'OTP sent successfully',
+                'dev_otp': devOtp,
+              };
+            }
+          } catch (e) {
+            print('⚠️ Could not fetch dev OTP: $e');
           }
-        } catch (e) {
-          print('⚠️ Could not fetch dev OTP: $e');
         }
-      }
 
-      return {
-        'success': true,
-        'message': 'OTP sent successfully',
-      };
-    } on AuthException catch (e) {
-      print('❌ Supabase Auth Error: ${e.message}');
-      return {
-        'success': false,
-        'message': e.message,
-      };
+        return {
+          'success': true,
+          'message': 'OTP sent successfully',
+        };
+      } else {
+        final errorData = jsonDecode(response.body);
+        return {
+          'success': false,
+          'message':
+              errorData['msg'] ?? errorData['message'] ?? 'Failed to send OTP',
+        };
+      }
     } catch (e) {
       print('❌ Send OTP Error: $e');
       return {
@@ -59,12 +81,23 @@ class AuthService {
   }
 
   /// Fetch OTP from dev endpoint (only works in development)
-  Future<String?> _getDevOtp(String phone) async {
+  /// ✅ FIXED: Using correct URL encoding format
+  Future<String?> _getDevOtp(String fullPhone) async {
     try {
+      // URL encode the phone number with + sign
+      final encodedPhone = Uri.encodeComponent(fullPhone);
+
+      print('🔧 Fetching dev OTP for: $encodedPhone');
+
       // Your backend's dev endpoint
-      final response = await http.get(
-        Uri.parse('${EnvConfig.apiBaseUrl}/auth/dev-otp/91$phone'),
-      );
+      final response = await http
+          .get(
+            Uri.parse('${EnvConfig.apiBaseUrl}/auth/dev-otp/$encodedPhone'),
+          )
+          .timeout(EnvConfig.requestTimeout);
+
+      print('🔧 Dev OTP Response Status: ${response.statusCode}');
+      print('🔧 Dev OTP Response Body: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -77,27 +110,53 @@ class AuthService {
   }
 
   /// Verify OTP via Supabase Auth
+  /// ✅ FIXED: Using correct verification endpoint
   Future<Map<String, dynamic>> verifyOtp(String phone, String otp) async {
     try {
-      final response = await _supabase.auth.verifyOTP(
-        type: OtpType.sms,
-        phone: '+91$phone',
-        token: otp,
-      );
+      // Clean and format phone number
+      final cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
+      final fullPhone = '+91$cleanPhone';
 
-      if (response.session != null) {
-        final user = response.user;
+      print('🔐 Verifying OTP: $otp for phone: $fullPhone');
 
-        if (user == null) {
+      // ✅ FIXED: Direct HTTP call to match working frontend
+      final response = await http
+          .post(
+            Uri.parse('${EnvConfig.supabaseUrl}/auth/v1/verify'),
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': EnvConfig.supabaseAnonKey,
+            },
+            body: jsonEncode({
+              'type': 'sms',
+              'phone': fullPhone,
+              'token': otp,
+            }),
+          )
+          .timeout(EnvConfig.requestTimeout);
+
+      print('🔐 Verify Response Status: ${response.statusCode}');
+      print('🔐 Verify Response Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        final user = data['user'];
+        final session =
+            data['access_token'] ?? data['session']?['access_token'];
+
+        if (user == null || session == null) {
           return {
             'success': false,
-            'message': 'No user returned from verification',
+            'message': 'Invalid response from server',
           };
         }
 
-        // ✅ CRITICAL FIX: Check if profile exists
+        // Set the session in Supabase client
+        await _supabase.auth.recoverSession(response.body);
 
-        final profile = await _getUserProfile(user.id);
+        // ✅ CRITICAL FIX: Check if profile exists
+        final profile = await _getUserProfile(user['id']);
 
         // ✅ User is new if profile doesn't exist OR if profile has no name
         final isNew = profile == null ||
@@ -105,31 +164,26 @@ class AuthService {
             profile['name'].toString().isEmpty;
 
         print(
-            '🔍 Profile check - User ID: ${user.id}, Profile exists: ${profile != null}, Is new: $isNew');
+            '🔍 Profile check - User ID: ${user['id']}, Profile exists: ${profile != null}, Is new: $isNew');
 
         return {
           'success': true,
           'is_new': isNew,
           'user': isNew
               ? {
-                  'id': user.id,
-                  'phone': user.phone,
+                  'id': user['id'],
+                  'phone': user['phone'],
                 }
               : profile,
-          'token': response.session!.accessToken,
+          'token': session,
+        };
+      } else {
+        final errorData = jsonDecode(response.body);
+        return {
+          'success': false,
+          'message': errorData['msg'] ?? errorData['message'] ?? 'Invalid OTP',
         };
       }
-
-      return {
-        'success': false,
-        'message': 'Invalid OTP',
-      };
-    } on AuthException catch (e) {
-      print('❌ Verify OTP Error: ${e.message}');
-      return {
-        'success': false,
-        'message': e.message,
-      };
     } catch (e) {
       print('❌ Verification Error: $e');
       return {
@@ -188,12 +242,16 @@ class AuthService {
 
       print('📝 Creating profile for user: $userId');
 
+      // Clean phone number for storage
+      final cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
+      final fullPhone = '+91$cleanPhone';
+
       // Create user profile in profiles table
       final profileData = {
         'id': userId,
         'name': name,
         'email': email,
-        'phone': phone,
+        'phone': fullPhone,
       };
 
       final response = await _supabase
