@@ -7,22 +7,21 @@ import '../config/env_config.dart';
 class AuthService {
   final _supabase = Supabase.instance.client;
 
-  // Toggle this for production
-  static const bool USE_DEV_MODE = true;
-
-  /// Send OTP via Supabase Auth (uses MessageBot)
+  /// Send OTP via Supabase Auth (triggers backend SMS hook)
   Future<Map<String, dynamic>> sendOtp(String phone) async {
     try {
+      print('📱 Sending OTP to: +91$phone');
+
       await _supabase.auth.signInWithOtp(
         phone: '+91$phone',
       );
 
-      print('📱 OTP sent to +91$phone');
+      print('✅ OTP request sent to Supabase');
 
-      // In dev mode, fetch the OTP from backend
-      if (USE_DEV_MODE) {
+      // In development mode, fetch the OTP from backend
+      if (EnvConfig.isDevelopment) {
         await Future.delayed(
-            const Duration(seconds: 1)); // Wait for OTP to be stored
+            const Duration(seconds: 2)); // Wait for OTP to be stored
 
         try {
           final devOtp = await _getDevOtp(phone);
@@ -61,17 +60,25 @@ class AuthService {
   /// Fetch OTP from dev endpoint (only works in development)
   Future<String?> _getDevOtp(String phone) async {
     try {
-      // Your backend's dev endpoint
-      final response = await http.get(
-        Uri.parse('${EnvConfig.apiBaseUrl}/auth/dev-otp/91$phone'),
-      );
+      final url = '${EnvConfig.authDevOtp}/$phone';
+      print('🔍 Fetching dev OTP from: $url');
+
+      final response = await http
+          .get(
+            Uri.parse(url),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      print('📥 Dev OTP Response: ${response.statusCode} - ${response.body}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         return data['otp']?.toString();
+      } else {
+        print('⚠️ Dev OTP endpoint returned: ${response.statusCode}');
       }
     } catch (e) {
-      print('Failed to get dev OTP: $e');
+      print('❌ Failed to get dev OTP: $e');
     }
     return null;
   }
@@ -79,6 +86,8 @@ class AuthService {
   /// Verify OTP via Supabase Auth
   Future<Map<String, dynamic>> verifyOtp(String phone, String otp) async {
     try {
+      print('🔐 Verifying OTP: $otp for phone: +91$phone');
+
       final response = await _supabase.auth.verifyOTP(
         type: OtpType.sms,
         phone: '+91$phone',
@@ -95,16 +104,17 @@ class AuthService {
           };
         }
 
-        // ✅ CRITICAL FIX: Check if profile exists
+        print('✅ OTP Verified - User ID: ${user.id}');
+
+        // Check if profile exists
         final profile = await _getUserProfile(user.id);
 
-        // ✅ User is new if profile doesn't exist OR if profile has no name
+        // User is new if profile doesn't exist OR if profile has no name
         final isNew = profile == null ||
             profile['name'] == null ||
             profile['name'].toString().isEmpty;
 
-        print(
-            '🔍 Profile check - User ID: ${user.id}, Profile exists: ${profile != null}, Is new: $isNew');
+        print('🔍 Profile check - User ID: ${user.id}, Is new: $isNew');
 
         return {
           'success': true,
@@ -138,8 +148,7 @@ class AuthService {
     }
   }
 
-  /// Get user profile from custom users table
-  /// ✅ FIX: Added better error handling and null checks
+  /// Get user profile from profiles table
   Future<Map<String, dynamic>?> _getUserProfile(String userId) async {
     try {
       print('🔍 Checking profile for user: $userId');
@@ -159,7 +168,6 @@ class AuthService {
       return response;
     } catch (e) {
       print('⚠️ Error fetching profile for user $userId: $e');
-      // If there's an error fetching profile, assume user is new
       return null;
     }
   }
@@ -197,7 +205,7 @@ class AuthService {
 
       final response = await _supabase
           .from('profiles')
-          .upsert(profileData) // ✅ Changed to upsert to handle any edge cases
+          .upsert(profileData)
           .select()
           .single();
 
@@ -240,5 +248,22 @@ class AuthService {
   /// Sign out
   Future<void> signOut() async {
     await _supabase.auth.signOut();
+  }
+
+  /// Get current user
+  Map<String, dynamic>? getCurrentUser() {
+    final user = _supabase.auth.currentUser;
+    if (user == null) return null;
+
+    return {
+      'id': user.id,
+      'phone': user.phone,
+      'email': user.email,
+    };
+  }
+
+  /// Get current session token
+  String? getCurrentToken() {
+    return _supabase.auth.currentSession?.accessToken;
   }
 }

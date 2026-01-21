@@ -33,17 +33,21 @@ class _SocialPageState extends State<SocialPage>
   Map<String, dynamic> stats = {
     'ratingsCount': 0,
     'friendsCount': 0,
-    'bookmarkCount': 0,
+    'badgesCount': 0,
   };
 
+  List ratings = [];
   List diaryEntries = [];
+  List badges = [];
   List bookmarks = [];
   List friends = [];
+
+  String badgeFilter = 'all'; // all, earned, in_progress
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     fetchAll();
   }
 
@@ -60,7 +64,7 @@ class _SocialPageState extends State<SocialPage>
     final headers = {'Content-Type': 'application/json'};
 
     if (session?.accessToken != null) {
-      headers['Authorization'] = 'Bearer ${session?.accessToken}';
+      headers['Authorization'] = 'Bearer ${session!.accessToken}';
     }
 
     final effectiveUserId = user?.id ?? widget.user['id']?.toString();
@@ -84,8 +88,17 @@ class _SocialPageState extends State<SocialPage>
 
       print('📡 Fetching social data for user: $userId');
 
-      // Fetch data with proper error handling for each endpoint
+      // Fetch all data with proper error handling for each endpoint
       final results = await Future.wait([
+        // Ratings
+        _fetchWithFallback(
+          () => http.get(
+            Uri.parse('${EnvConfig.apiBaseUrl}/users/$userId/ratings'),
+            headers: headers,
+          ),
+          'ratings',
+        ),
+
         // Diary entries
         _fetchWithFallback(
           () => http.get(
@@ -95,7 +108,7 @@ class _SocialPageState extends State<SocialPage>
           'diary',
         ),
 
-        // Bookmarks - try /bookmarks endpoint (no userId in path)
+        // Bookmarks
         _fetchWithFallback(
           () => http.get(
             Uri.parse('${EnvConfig.apiBaseUrl}/bookmarks'),
@@ -112,19 +125,30 @@ class _SocialPageState extends State<SocialPage>
           ),
           'friends',
         ),
+
+        // Badges
+        _fetchWithFallback(
+          () => http.get(
+            Uri.parse('${EnvConfig.apiBaseUrl}/users/$userId/badges'),
+            headers: headers,
+          ),
+          'badges',
+        ),
       ]);
 
       if (mounted) {
         setState(() {
-          diaryEntries = results[0];
-          bookmarks = results[1];
-          friends = results[2];
+          ratings = results[0];
+          diaryEntries = results[1];
+          bookmarks = results[2];
+          friends = results[3];
+          badges = results[4];
 
           // Calculate stats from actual data
           stats = {
-            'ratingsCount': diaryEntries.length,
+            'ratingsCount': ratings.length,
             'friendsCount': friends.length,
-            'bookmarkCount': bookmarks.length,
+            'badgesCount': badges.where((b) => b['earned'] == true).length,
           };
 
           hasError = false;
@@ -183,7 +207,7 @@ class _SocialPageState extends State<SocialPage>
   List _safeParseArray(String body) {
     try {
       final data = jsonDecode(body);
-      if (data['success'] == true) {
+      if (data is Map && data['success'] == true) {
         return (data['data'] as List? ?? []);
       } else if (data is List) {
         return data;
@@ -196,17 +220,23 @@ class _SocialPageState extends State<SocialPage>
     }
   }
 
-  // ---------------- Diary CRUD ----------------
+  // ============ DIARY CRUD OPERATIONS ============
 
-  Future<void> addDiary({
+  Future<void> addDiaryEntry({
     required String bevName,
     required String restaurant,
     required int rating,
     String? notes,
     String? image,
+    bool sharedToFeed = false,
   }) async {
-    if (bevName.isEmpty || restaurant.isEmpty || rating < 1 || rating > 5) {
-      _toast('Please fill all required fields correctly', isError: true);
+    if (bevName.isEmpty) {
+      _toast('Please enter drink name', isError: true);
+      return;
+    }
+
+    if (rating < 1 || rating > 5) {
+      _toast('Please select a rating', isError: true);
       return;
     }
 
@@ -223,11 +253,12 @@ class _SocialPageState extends State<SocialPage>
               'rating': rating,
               'notes': notes ?? '',
               'image': image ?? '',
+              'sharedToFeed': sharedToFeed,
             }),
           )
           .timeout(const Duration(seconds: 15));
 
-      print('Add diary response: ${response.statusCode}');
+      print('📡 Add diary response: ${response.statusCode}');
 
       if (response.statusCode == 401) {
         _toast('Session expired. Please login again.', isError: true);
@@ -237,6 +268,7 @@ class _SocialPageState extends State<SocialPage>
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         _toast('Diary entry added');
+        // Refresh data
         fetchAll();
       } else {
         _toast('Failed to add diary entry', isError: true);
@@ -244,12 +276,13 @@ class _SocialPageState extends State<SocialPage>
     } on TimeoutException {
       _toast('Request timed out', isError: true);
     } catch (e) {
-      print('Add diary error: $e');
+      print('❌ Add diary error: $e');
       _toast('Error adding diary', isError: true);
     }
   }
 
-  Future<void> updateDiary(String entryId, Map<String, dynamic> updates) async {
+  Future<void> updateDiaryEntry(
+      int entryId, Map<String, dynamic> updates) async {
     try {
       final headers = await _getHeaders();
 
@@ -261,7 +294,7 @@ class _SocialPageState extends State<SocialPage>
           )
           .timeout(const Duration(seconds: 15));
 
-      print('Update diary response: ${response.statusCode}');
+      print('📡 Update diary response: ${response.statusCode}');
 
       if (response.statusCode == 401) {
         _toast('Session expired. Please login again.', isError: true);
@@ -278,12 +311,12 @@ class _SocialPageState extends State<SocialPage>
     } on TimeoutException {
       _toast('Request timed out', isError: true);
     } catch (e) {
-      print('Update diary error: $e');
+      print('❌ Update diary error: $e');
       _toast('Error updating diary', isError: true);
     }
   }
 
-  Future<void> deleteDiary(String entryId) async {
+  Future<void> deleteDiaryEntry(int entryId) async {
     try {
       final headers = await _getHeaders();
 
@@ -294,7 +327,7 @@ class _SocialPageState extends State<SocialPage>
           )
           .timeout(const Duration(seconds: 15));
 
-      print('Delete diary response: ${response.statusCode}');
+      print('📡 Delete diary response: ${response.statusCode}');
 
       if (response.statusCode == 401) {
         _toast('Session expired. Please login again.', isError: true);
@@ -303,7 +336,7 @@ class _SocialPageState extends State<SocialPage>
       }
 
       if (response.statusCode == 200) {
-        _toast('Diary deleted');
+        _toast('Diary entry deleted');
         fetchAll();
       } else {
         _toast('Failed to delete diary', isError: true);
@@ -311,43 +344,69 @@ class _SocialPageState extends State<SocialPage>
     } on TimeoutException {
       _toast('Request timed out', isError: true);
     } catch (e) {
-      print('Delete diary error: $e');
+      print('❌ Delete diary error: $e');
       _toast('Error deleting diary', isError: true);
     }
   }
 
-  Future<void> toggleBookmark(String restaurantId) async {
+  // ============ BOOKMARK OPERATIONS ============
+
+  Future<void> removeBookmark(String restaurantId) async {
     try {
       final headers = await _getHeaders();
       final userId =
           _supabase.auth.currentUser?.id ?? widget.user['id']?.toString();
 
-      final isCurrentlyBookmarked = bookmarks.any(
-        (b) =>
-            b['restaurantid']?.toString() == restaurantId ||
-            b['restaurantId']?.toString() == restaurantId ||
-            b['id']?.toString() == restaurantId,
-      );
+      final response = await http
+          .delete(
+            Uri.parse(
+                '${EnvConfig.apiBaseUrl}/users/$userId/bookmarks/$restaurantId'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 15));
 
-      http.Response response;
+      print('📡 Remove bookmark response: ${response.statusCode}');
 
-      if (isCurrentlyBookmarked) {
-        response = await http
-            .delete(
-              Uri.parse(
-                  '${EnvConfig.apiBaseUrl}/users/$userId/bookmarks/$restaurantId'),
-              headers: headers,
-            )
-            .timeout(const Duration(seconds: 15));
-      } else {
-        response = await http
-            .post(
-              Uri.parse(
-                  '${EnvConfig.apiBaseUrl}/users/$userId/bookmarks/$restaurantId'),
-              headers: headers,
-            )
-            .timeout(const Duration(seconds: 15));
+      if (response.statusCode == 401) {
+        _toast('Session expired. Please login again.', isError: true);
+        context.go('/auth');
+        return;
       }
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        _toast('Bookmark removed');
+        fetchAll();
+      } else {
+        _toast('Failed to remove bookmark', isError: true);
+      }
+    } on TimeoutException {
+      _toast('Request timed out', isError: true);
+    } catch (e) {
+      print('❌ Remove bookmark error: $e');
+      _toast('Error removing bookmark', isError: true);
+    }
+  }
+
+  // ============ FRIEND OPERATIONS ============
+
+  Future<void> addFriendByPhone(String phone) async {
+    try {
+      final headers = await _getHeaders();
+      final userId =
+          _supabase.auth.currentUser?.id ?? widget.user['id']?.toString();
+
+      final response = await http
+          .post(
+            Uri.parse('${EnvConfig.apiBaseUrl}/friends'),
+            headers: headers,
+            body: jsonEncode({
+              'userId': userId,
+              'friendPhone': phone,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      print('📡 Add friend response: ${response.statusCode}');
 
       if (response.statusCode == 401) {
         _toast('Session expired. Please login again.', isError: true);
@@ -356,25 +415,167 @@ class _SocialPageState extends State<SocialPage>
       }
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        _toast(isCurrentlyBookmarked ? 'Bookmark removed' : 'Bookmarked!');
+        _toast('Friend added');
         fetchAll();
+      } else {
+        final data = jsonDecode(response.body);
+        _toast(data['message'] ?? 'Failed to add friend', isError: true);
       }
     } on TimeoutException {
       _toast('Request timed out', isError: true);
     } catch (e) {
-      print('Toggle bookmark error: $e');
-      _toast('Error updating bookmark', isError: true);
+      print('❌ Add friend error: $e');
+      _toast('Error adding friend', isError: true);
     }
   }
 
+  Future<void> removeFriend(String friendId) async {
+    try {
+      final headers = await _getHeaders();
+      final userId =
+          _supabase.auth.currentUser?.id ?? widget.user['id']?.toString();
+
+      final response = await http
+          .delete(
+            Uri.parse('${EnvConfig.apiBaseUrl}/friends/$userId/$friendId'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 15));
+
+      print('📡 Remove friend response: ${response.statusCode}');
+
+      if (response.statusCode == 401) {
+        _toast('Session expired. Please login again.', isError: true);
+        context.go('/auth');
+        return;
+      }
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        _toast('Friend removed');
+        fetchAll();
+      } else {
+        _toast('Failed to remove friend', isError: true);
+      }
+    } on TimeoutException {
+      _toast('Request timed out', isError: true);
+    } catch (e) {
+      print('❌ Remove friend error: $e');
+      _toast('Error removing friend', isError: true);
+    }
+  }
+
+  // ============ BADGE OPERATIONS ============
+
+  Future<void> claimBadge(int badgeId) async {
+    try {
+      final headers = await _getHeaders();
+      final userId =
+          _supabase.auth.currentUser?.id ?? widget.user['id']?.toString();
+
+      final response = await http
+          .post(
+            Uri.parse('${EnvConfig.apiBaseUrl}/users/$userId/badges/$badgeId'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 15));
+
+      print('📡 Claim badge response: ${response.statusCode}');
+
+      if (response.statusCode == 401) {
+        _toast('Session expired. Please login again.', isError: true);
+        context.go('/auth');
+        return;
+      }
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        _toast('Badge unlocked! 🎉');
+        fetchAll();
+      } else {
+        final data = jsonDecode(response.body);
+        _toast(data['message'] ?? 'Failed to claim badge', isError: true);
+      }
+    } on TimeoutException {
+      _toast('Request timed out', isError: true);
+    } catch (e) {
+      print('❌ Claim badge error: $e');
+      _toast('Error claiming badge', isError: true);
+    }
+  }
+
+  // ============ USER PROFILE OPERATIONS ============
+
+  Future<void> updateProfile(Map<String, dynamic> updates) async {
+    try {
+      final headers = await _getHeaders();
+      final userId =
+          _supabase.auth.currentUser?.id ?? widget.user['id']?.toString();
+
+      final response = await http
+          .patch(
+            Uri.parse('${EnvConfig.apiBaseUrl}/users/$userId'),
+            headers: headers,
+            body: jsonEncode(updates),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      print('📡 Update profile response: ${response.statusCode}');
+
+      if (response.statusCode == 401) {
+        _toast('Session expired. Please login again.', isError: true);
+        context.go('/auth');
+        return;
+      }
+
+      if (response.statusCode == 200) {
+        _toast('Profile updated');
+        // Update local user data
+        setState(() {
+          widget.user.addAll(updates);
+        });
+      } else {
+        _toast('Failed to update profile', isError: true);
+      }
+    } on TimeoutException {
+      _toast('Request timed out', isError: true);
+    } catch (e) {
+      print('❌ Update profile error: $e');
+      _toast('Error updating profile', isError: true);
+    }
+  }
+
+  // ============ UTILITY METHODS ============
+
   void logout() {
-    widget.onLogout();
-    context.go('/auth');
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.card,
+        title: const Text('Logout', style: TextStyle(color: Colors.white)),
+        content: const Text(
+          'Are you sure you want to logout?',
+          style: TextStyle(color: AppTheme.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              widget.onLogout();
+              context.go('/auth');
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Logout', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _toast(String msg, {bool isError = false}) {
     if (!mounted) return;
-
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg),
@@ -384,7 +585,7 @@ class _SocialPageState extends State<SocialPage>
           borderRadius: BorderRadius.circular(AppTheme.radiusMd),
         ),
         margin: const EdgeInsets.all(16),
-        duration: const Duration(seconds: 3),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -394,9 +595,7 @@ class _SocialPageState extends State<SocialPage>
     if (loading) {
       return Scaffold(
         backgroundColor: AppTheme.background,
-        body: SafeArea(
-          child: _buildLoadingSkeleton(),
-        ),
+        body: SafeArea(child: _buildLoadingSkeleton()),
         bottomNavigationBar: const BottomNav(active: 'social'),
       );
     }
@@ -404,9 +603,7 @@ class _SocialPageState extends State<SocialPage>
     if (hasError) {
       return Scaffold(
         backgroundColor: AppTheme.background,
-        body: SafeArea(
-          child: _buildErrorState(),
-        ),
+        body: SafeArea(child: _buildErrorState()),
         bottomNavigationBar: const BottomNav(active: 'social'),
       );
     }
@@ -420,23 +617,15 @@ class _SocialPageState extends State<SocialPage>
           backgroundColor: AppTheme.card,
           child: Column(
             children: [
-              _header(),
-              TabBar(
-                controller: _tabController,
-                indicatorColor: AppTheme.primary,
-                labelColor: AppTheme.primary,
-                unselectedLabelColor: AppTheme.textSecondary,
-                tabs: const [
-                  Tab(text: 'Diary'),
-                  Tab(text: 'Saves'),
-                  Tab(text: 'Friends'),
-                ],
-              ),
+              _buildProfileHeader(),
+              _buildTabBar(),
               Expanded(
                 child: TabBarView(
                   controller: _tabController,
                   children: [
+                    _ratingsTab(),
                     _diaryTab(),
+                    _badgesTab(),
                     _savesTab(),
                     _friendsTab(),
                   ],
@@ -447,13 +636,421 @@ class _SocialPageState extends State<SocialPage>
         ),
       ),
       bottomNavigationBar: const BottomNav(active: 'social'),
-      floatingActionButton: _tabController.index == 0
-          ? FloatingActionButton(
+      floatingActionButton: _tabController.index == 1
+          ? FloatingActionButton.extended(
               backgroundColor: AppTheme.primary,
               onPressed: _showAddDiaryDialog,
-              child: const Icon(Icons.add, color: Colors.black),
+              icon: const Icon(Icons.add, color: Colors.black),
+              label: const Text('Add Entry',
+                  style: TextStyle(
+                      color: Colors.black, fontWeight: FontWeight.bold)),
             )
           : null,
+    );
+  }
+
+  Widget _buildProfileHeader() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppTheme.primary.withOpacity(0.1),
+            AppTheme.secondary.withOpacity(0.1),
+          ],
+        ),
+        border: const Border(bottom: BorderSide(color: AppTheme.border)),
+      ),
+      child: Column(
+        children: [
+          // Avatar with gradient ring
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                colors: [AppTheme.primary, AppTheme.secondary],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppTheme.background,
+              ),
+              child: CircleAvatar(
+                radius: 48,
+                backgroundColor: AppTheme.primary,
+                child: Text(
+                  widget.user['name']?[0]?.toUpperCase() ?? '?',
+                  style: const TextStyle(
+                      fontSize: 36,
+                      color: Colors.black,
+                      fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            widget.user['name'] ?? 'User',
+            style: Theme.of(context)
+                .textTheme
+                .headlineSmall
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '@${(widget.user['name'] ?? 'user').toLowerCase().replaceAll(' ', '')}',
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(color: AppTheme.textTertiary),
+          ),
+          const SizedBox(height: 20),
+
+          // Stats Summary
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildStatItem('Ratings', stats['ratingsCount'] ?? 0),
+              Container(width: 1, height: 40, color: AppTheme.border),
+              _buildStatItem('Friends', stats['friendsCount'] ?? 0),
+              Container(width: 1, height: 40, color: AppTheme.border),
+              _buildStatItem('Badges', stats['badgesCount'] ?? 0),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Edit Profile & Logout buttons
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _toast('Edit profile coming soon'),
+                  icon:
+                      const Icon(Icons.edit, size: 18, color: AppTheme.primary),
+                  label: const Text('Edit Profile',
+                      style: TextStyle(
+                          color: AppTheme.primary,
+                          fontWeight: FontWeight.w600)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppTheme.primary),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppTheme.radiusMd)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: logout,
+                  icon: const Icon(Icons.logout_rounded, size: 18),
+                  label: const Text('Logout',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red.shade600,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppTheme.radiusMd)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatItem(String label, int value) {
+    return Column(
+      children: [
+        Text(
+          '$value',
+          style: const TextStyle(
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 13,
+            color: AppTheme.textSecondary,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTabBar() {
+    return Container(
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppTheme.border)),
+      ),
+      child: TabBar(
+        controller: _tabController,
+        indicatorColor: AppTheme.primary,
+        indicatorWeight: 3,
+        labelColor: AppTheme.primary,
+        unselectedLabelColor: AppTheme.textSecondary,
+        labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        isScrollable: true,
+        tabs: const [
+          Tab(text: 'Ratings'),
+          Tab(text: 'Diary'),
+          Tab(text: 'Badges'),
+          Tab(text: 'Saves'),
+          Tab(text: 'Friends'),
+        ],
+      ),
+    );
+  }
+
+  // ============ TAB 1: RATINGS ============
+  Widget _ratingsTab() {
+    if (ratings.isEmpty) {
+      return _buildEmptyState(
+        icon: Icons.star_border_rounded,
+        title: 'No ratings yet',
+        subtitle: 'Start rating beverages to build your credibility',
+        actionLabel: 'Explore Beverages',
+        onAction: () => context.go('/'),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: ratings.length,
+      itemBuilder: (_, i) {
+        final rating = ratings[i];
+        return _buildRatingCard(rating);
+      },
+    );
+  }
+
+  Widget _buildRatingCard(Map rating) {
+    final beverage = rating['beverage'] as Map? ?? {};
+    final beverageId =
+        beverage['id'] ?? rating['beverageId'] ?? rating['beverage_id'];
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.card,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(16),
+        leading: ClipRRect(
+          borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+          child: beverage['photo'] != null &&
+                  beverage['photo'].toString().isNotEmpty
+              ? Image.network(beverage['photo'],
+                  width: 60,
+                  height: 60,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => _buildPlaceholderIcon())
+              : _buildPlaceholderIcon(),
+        ),
+        title: Text(
+          beverage['name'] ?? 'Beverage',
+          style: const TextStyle(
+              color: AppTheme.textPrimary,
+              fontWeight: FontWeight.bold,
+              fontSize: 16),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 4),
+            Text(
+              rating['restaurant'] ?? '',
+              style:
+                  const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                ...List.generate(
+                    5,
+                    (index) => Icon(
+                          index < (rating['rating'] ?? 0)
+                              ? Icons.star
+                              : Icons.star_border,
+                          color: AppTheme.primary,
+                          size: 16,
+                        )),
+                const SizedBox(width: 12),
+                Text(
+                  _formatDate(
+                      rating['createdAt'] ?? rating['created_at'] ?? ''),
+                  style: const TextStyle(
+                      color: AppTheme.textTertiary, fontSize: 11),
+                ),
+              ],
+            ),
+            if (rating['review'] != null &&
+                rating['review'].toString().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                rating['review'],
+                style: const TextStyle(
+                    color: AppTheme.textSecondary, fontSize: 13),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ],
+        ),
+        onTap: () {
+          // Navigate to beverage detail
+          if (beverageId != null) {
+            context.push('/beverage/$beverageId');
+          }
+        },
+      ),
+    );
+  }
+
+  // ============ TAB 2: DRINK DIARY ============
+  Widget _diaryTab() {
+    if (diaryEntries.isEmpty) {
+      return _buildEmptyState(
+        icon: Icons.book_outlined,
+        title: 'No diary entries yet',
+        subtitle: 'Tap the + button to add your first drink memory',
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: diaryEntries.length,
+      itemBuilder: (_, i) {
+        final entry = diaryEntries[i];
+        return _buildDiaryCard(entry);
+      },
+    );
+  }
+
+  Widget _buildDiaryCard(Map entry) {
+    final entryId = entry['id'] ?? entry['entryid'] ?? entry['entryId'];
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.card,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(16),
+        leading: ClipRRect(
+          borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+          child: entry['image'] != null && entry['image'].toString().isNotEmpty
+              ? Image.network(entry['image'],
+                  width: 60,
+                  height: 60,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => _buildPlaceholderIcon())
+              : _buildPlaceholderIcon(),
+        ),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                entry['bevName'] ?? entry['bev_name'] ?? 'Drink',
+                style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16),
+              ),
+            ),
+            if (entry['sharedToFeed'] == true ||
+                entry['shared_to_feed'] == true)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.secondary.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                  border:
+                      Border.all(color: AppTheme.secondary.withOpacity(0.3)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.share, size: 10, color: AppTheme.secondary),
+                    SizedBox(width: 4),
+                    Text('Shared',
+                        style: TextStyle(
+                            fontSize: 10,
+                            color: AppTheme.secondary,
+                            fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+          ],
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 4),
+            Text(
+              entry['restaurant'] ?? '',
+              style:
+                  const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                ...List.generate(
+                    5,
+                    (index) => Icon(
+                          index < (entry['rating'] ?? 0)
+                              ? Icons.star
+                              : Icons.star_border,
+                          color: AppTheme.primary,
+                          size: 16,
+                        )),
+                const SizedBox(width: 12),
+                Text(
+                  _formatDateTime(
+                      entry['createdAt'] ?? entry['created_at'] ?? ''),
+                  style: const TextStyle(
+                      color: AppTheme.textTertiary, fontSize: 11),
+                ),
+              ],
+            ),
+            if (entry['notes'] != null &&
+                entry['notes'].toString().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                entry['notes'],
+                style: const TextStyle(
+                    color: AppTheme.textSecondary, fontSize: 13),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ],
+        ),
+        trailing: IconButton(
+          icon: const Icon(Icons.delete_outline, color: Colors.red, size: 22),
+          onPressed: () => _confirmDeleteDiary(entryId),
+        ),
+        onTap: () => _viewDiaryEntry(entry),
+      ),
     );
   }
 
@@ -462,61 +1059,175 @@ class _SocialPageState extends State<SocialPage>
     final restaurantController = TextEditingController();
     final notesController = TextEditingController();
     int rating = 3;
+    bool shareToFeed = false;
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           backgroundColor: AppTheme.card,
-          title: const Text('Add Diary Entry',
-              style: TextStyle(color: Colors.white)),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppTheme.radiusLg)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                      colors: [AppTheme.primary, AppTheme.primaryLight]),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.book, color: Colors.black, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Text('Add Diary Entry',
+                  style: TextStyle(color: Colors.white, fontSize: 20)),
+            ],
+          ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Photo upload placeholder
+                GestureDetector(
+                  onTap: () => _toast('Camera/Gallery picker coming soon'),
+                  child: Container(
+                    height: 140,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: AppTheme.glassLight,
+                      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                      border: Border.all(
+                          color: AppTheme.border, style: BorderStyle.solid),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primary.withOpacity(0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.add_a_photo,
+                              color: AppTheme.primary, size: 32),
+                        ),
+                        const SizedBox(height: 12),
+                        const Text('Add Photo',
+                            style: TextStyle(
+                                color: AppTheme.textSecondary,
+                                fontWeight: FontWeight.w500)),
+                        const SizedBox(height: 4),
+                        const Text('Camera or Gallery',
+                            style: TextStyle(
+                                color: AppTheme.textTertiary, fontSize: 11)),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
                 TextField(
                   controller: nameController,
                   style: const TextStyle(color: Colors.white),
                   decoration: const InputDecoration(
-                    labelText: 'Beverage Name',
+                    labelText: 'Drink Name *',
                     labelStyle: TextStyle(color: Colors.white70),
+                    enabledBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(color: AppTheme.border)),
+                    focusedBorder: UnderlineInputBorder(
+                        borderSide:
+                            BorderSide(color: AppTheme.primary, width: 2)),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 TextField(
                   controller: restaurantController,
                   style: const TextStyle(color: Colors.white),
                   decoration: const InputDecoration(
-                    labelText: 'Restaurant',
+                    labelText: 'Restaurant / Place',
                     labelStyle: TextStyle(color: Colors.white70),
+                    enabledBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(color: AppTheme.border)),
+                    focusedBorder: UnderlineInputBorder(
+                        borderSide:
+                            BorderSide(color: AppTheme.primary, width: 2)),
+                    suffixIcon:
+                        Icon(Icons.search, color: AppTheme.textSecondary),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 20),
+                const Text('Rating',
+                    style: TextStyle(
+                        color: Colors.white70, fontWeight: FontWeight.w500)),
+                const SizedBox(height: 8),
                 Row(
-                  children: [
-                    const Text('Rating: ',
-                        style: TextStyle(color: Colors.white)),
-                    ...List.generate(5, (index) {
-                      return IconButton(
-                        icon: Icon(
-                          index < rating ? Icons.star : Icons.star_border,
-                          color: AppTheme.primary,
-                        ),
-                        onPressed: () {
-                          setDialogState(() => rating = index + 1);
-                        },
-                      );
-                    }),
-                  ],
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(5, (index) {
+                    return IconButton(
+                      icon: Icon(
+                        index < rating ? Icons.star : Icons.star_border,
+                        color: AppTheme.primary,
+                        size: 36,
+                      ),
+                      onPressed: () {
+                        setDialogState(() => rating = index + 1);
+                      },
+                    );
+                  }),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 TextField(
                   controller: notesController,
                   style: const TextStyle(color: Colors.white),
                   maxLines: 3,
+                  maxLength: 200,
                   decoration: const InputDecoration(
                     labelText: 'Notes (optional)',
                     labelStyle: TextStyle(color: Colors.white70),
+                    enabledBorder: OutlineInputBorder(
+                        borderSide: BorderSide(color: AppTheme.border)),
+                    focusedBorder: OutlineInputBorder(
+                        borderSide:
+                            BorderSide(color: AppTheme.primary, width: 2)),
+                    helperText: 'Max 200 characters',
+                    helperStyle:
+                        TextStyle(color: AppTheme.textTertiary, fontSize: 11),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.glassLight,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                    border: Border.all(color: AppTheme.border),
+                  ),
+                  child: Row(
+                    children: [
+                      Checkbox(
+                        value: shareToFeed,
+                        onChanged: (v) =>
+                            setDialogState(() => shareToFeed = v ?? false),
+                        activeColor: AppTheme.secondary,
+                      ),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Share to Feed',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w500)),
+                            SizedBox(height: 2),
+                            Text('Make this visible to your friends',
+                                style: TextStyle(
+                                    color: AppTheme.textTertiary,
+                                    fontSize: 11)),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -525,19 +1236,32 @@ class _SocialPageState extends State<SocialPage>
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
+              child: const Text('Cancel',
+                  style: TextStyle(color: AppTheme.textSecondary)),
             ),
             ElevatedButton(
               onPressed: () {
+                if (nameController.text.trim().isEmpty) {
+                  _toast('Please enter drink name', isError: true);
+                  return;
+                }
                 Navigator.pop(context);
-                addDiary(
-                  bevName: nameController.text,
-                  restaurant: restaurantController.text,
+                addDiaryEntry(
+                  bevName: nameController.text.trim(),
+                  restaurant: restaurantController.text.trim(),
                   rating: rating,
-                  notes: notesController.text,
+                  notes: notesController.text.trim(),
+                  sharedToFeed: shareToFeed,
                 );
               },
-              child: const Text('Add'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+              child: const Text('Save Entry',
+                  style: TextStyle(
+                      color: Colors.black, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -545,6 +1269,909 @@ class _SocialPageState extends State<SocialPage>
     );
   }
 
+  void _viewDiaryEntry(Map entry) {
+    final entryId = entry['id'] ?? entry['entryid'] ?? entry['entryId'];
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: AppTheme.card,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.radiusLg)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Image
+            if (entry['image'] != null && entry['image'].toString().isNotEmpty)
+              ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(AppTheme.radiusLg)),
+                child: Image.network(entry['image'],
+                    height: 240, width: double.infinity, fit: BoxFit.cover),
+              )
+            else
+              Container(
+                height: 240,
+                decoration: const BoxDecoration(
+                  color: AppTheme.glassLight,
+                  borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(AppTheme.radiusLg)),
+                ),
+                child: const Center(
+                  child: Icon(Icons.local_bar_rounded,
+                      size: 80, color: AppTheme.textTertiary),
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          entry['bevName'] ?? entry['bev_name'] ?? 'Drink',
+                          style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white),
+                        ),
+                      ),
+                      if (entry['sharedToFeed'] == true ||
+                          entry['shared_to_feed'] == true)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppTheme.secondary.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                                color: AppTheme.secondary.withOpacity(0.3)),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.share,
+                                  size: 12, color: AppTheme.secondary),
+                              SizedBox(width: 6),
+                              Text('Shared',
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: AppTheme.secondary,
+                                      fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  if (entry['restaurant'] != null &&
+                      entry['restaurant'].toString().isNotEmpty)
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on,
+                            size: 16, color: AppTheme.textSecondary),
+                        const SizedBox(width: 6),
+                        Text(
+                          entry['restaurant'],
+                          style: const TextStyle(
+                              color: AppTheme.textSecondary, fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      ...List.generate(
+                          5,
+                          (index) => Icon(
+                                index < (entry['rating'] ?? 0)
+                                    ? Icons.star
+                                    : Icons.star_border,
+                                color: AppTheme.primary,
+                                size: 20,
+                              )),
+                      const SizedBox(width: 12),
+                      Text(
+                        _formatDateTime(
+                            entry['createdAt'] ?? entry['created_at'] ?? ''),
+                        style: const TextStyle(
+                            color: AppTheme.textTertiary, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                  if (entry['notes'] != null &&
+                      entry['notes'].toString().isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    const Divider(color: AppTheme.border),
+                    const SizedBox(height: 16),
+                    const Text('Notes',
+                        style: TextStyle(
+                            color: AppTheme.textSecondary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    Text(
+                      entry['notes'],
+                      style: const TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontSize: 14,
+                          height: 1.5),
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            _toast('Edit feature coming soon');
+                          },
+                          icon: const Icon(Icons.edit, size: 18),
+                          label: const Text('Edit'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppTheme.primary,
+                            side: const BorderSide(color: AppTheme.primary),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            _confirmDeleteDiary(entryId);
+                          },
+                          icon: const Icon(Icons.delete, size: 18),
+                          label: const Text('Delete'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red.shade600,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmDeleteDiary(dynamic entryId) {
+    if (entryId == null) {
+      _toast('Invalid entry ID', isError: true);
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.card,
+        title:
+            const Text('Delete Entry?', style: TextStyle(color: Colors.white)),
+        content: const Text(
+          'This action cannot be undone.',
+          style: TextStyle(color: AppTheme.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              deleteDiaryEntry(
+                  entryId is int ? entryId : int.parse(entryId.toString()));
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ============ TAB 3: BADGES ============
+  Widget _badgesTab() {
+    return Column(
+      children: [
+        // Sub-tabs filter
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: AppTheme.border)),
+          ),
+          child: Row(
+            children: [
+              _buildBadgeFilterChip('All', 'all'),
+              const SizedBox(width: 8),
+              _buildBadgeFilterChip('Earned', 'earned'),
+              const SizedBox(width: 8),
+              _buildBadgeFilterChip('In Progress', 'in_progress'),
+            ],
+          ),
+        ),
+        Expanded(
+          child: _buildBadgesList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBadgeFilterChip(String label, String value) {
+    final isSelected = badgeFilter == value;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => badgeFilter = value),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            gradient: isSelected
+                ? const LinearGradient(
+                    colors: [AppTheme.primary, AppTheme.primaryLight])
+                : null,
+            color: isSelected ? null : AppTheme.glassLight,
+            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+            border: Border.all(
+                color: isSelected ? Colors.transparent : AppTheme.border),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: isSelected ? Colors.black : AppTheme.textPrimary,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBadgesList() {
+    List filteredBadges = badges;
+
+    if (badgeFilter == 'earned') {
+      filteredBadges = badges.where((b) => b['earned'] == true).toList();
+    } else if (badgeFilter == 'in_progress') {
+      filteredBadges = badges.where((b) => b['earned'] == false).toList();
+    }
+
+    if (filteredBadges.isEmpty) {
+      return _buildEmptyState(
+        icon: Icons.emoji_events_outlined,
+        title: 'No badges here',
+        subtitle: badgeFilter == 'earned'
+            ? 'Keep exploring to earn badges'
+            : 'All badges unlocked!',
+      );
+    }
+
+    // Group by tier
+    final Map<String, List> grouped = {};
+    for (final badge in filteredBadges) {
+      final tier = badge['tier'] as String;
+      if (!grouped.containsKey(tier)) {
+        grouped[tier] = [];
+      }
+      grouped[tier]!.add(badge);
+    }
+
+    final tiers = ['Newbie', 'SipZeR', 'Alpha Z'];
+    final tierColors = {
+      'Newbie': Colors.green,
+      'SipZeR': Colors.blue,
+      'Alpha Z': Colors.purple,
+    };
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: tiers.length,
+      itemBuilder: (_, tierIndex) {
+        final tier = tiers[tierIndex];
+        final tierBadges = grouped[tier] ?? [];
+
+        if (tierBadges.isEmpty) return const SizedBox.shrink();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (tierIndex > 0) const SizedBox(height: 16),
+            // Tier Header
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    tierColors[tier]!.withOpacity(0.2),
+                    Colors.transparent
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                border: Border.all(color: tierColors[tier]!.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    tier == 'Newbie'
+                        ? Icons.stars
+                        : tier == 'SipZeR'
+                            ? Icons.auto_awesome
+                            : Icons.emoji_events,
+                    color: tierColors[tier],
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    tier,
+                    style: TextStyle(
+                      color: tierColors[tier],
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            ...tierBadges.map((badge) => _buildBadgeCard(badge)),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildBadgeCard(Map badge) {
+    final earned = badge['earned'] == true;
+    final progress = badge['progress'] as int;
+    final target = badge['target'] as int;
+    final percentage = (progress / target * 100).clamp(0, 100);
+
+    return GestureDetector(
+      onTap: () => _showBadgeInfo(badge),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: earned ? AppTheme.card : AppTheme.glassLight,
+          borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+          border: Border.all(
+            color: earned ? AppTheme.primary.withOpacity(0.5) : AppTheme.border,
+            width: earned ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            // Badge Icon
+            Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                gradient: earned
+                    ? const LinearGradient(
+                        colors: [AppTheme.primary, AppTheme.primaryLight])
+                    : null,
+                color: earned ? null : AppTheme.glassStrong,
+                shape: BoxShape.circle,
+                boxShadow: earned
+                    ? [
+                        BoxShadow(
+                            color: AppTheme.primary.withOpacity(0.3),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4))
+                      ]
+                    : null,
+              ),
+              child: Center(
+                child: Text(
+                  badge['icon'],
+                  style: TextStyle(
+                    fontSize: 32,
+                    color: earned ? null : Colors.white24,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          badge['name'],
+                          style: TextStyle(
+                            color: earned
+                                ? AppTheme.textPrimary
+                                : AppTheme.textSecondary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                      if (earned)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primary.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Text(
+                            'Unlocked!',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: AppTheme.primary,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    badge['description'],
+                    style: TextStyle(
+                      color: earned
+                          ? AppTheme.textSecondary
+                          : AppTheme.textTertiary,
+                      fontSize: 12,
+                    ),
+                  ),
+                  if (!earned) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: percentage / 100,
+                              backgroundColor: AppTheme.border,
+                              valueColor: const AlwaysStoppedAnimation<Color>(
+                                  AppTheme.primary),
+                              minHeight: 6,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          '$progress/$target',
+                          style: const TextStyle(
+                            color: AppTheme.textTertiary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showBadgeInfo(Map badge) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.card,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.radiusLg)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                gradient: badge['earned'] == true
+                    ? const LinearGradient(
+                        colors: [AppTheme.primary, AppTheme.primaryLight])
+                    : null,
+                color: badge['earned'] == true ? null : AppTheme.glassStrong,
+                shape: BoxShape.circle,
+                boxShadow: badge['earned'] == true
+                    ? [
+                        BoxShadow(
+                            color: AppTheme.primary.withOpacity(0.4),
+                            blurRadius: 20,
+                            offset: const Offset(0, 8))
+                      ]
+                    : null,
+              ),
+              child: Center(
+                child: Text(
+                  badge['icon'],
+                  style: const TextStyle(fontSize: 48),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              badge['name'],
+              style: const TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: badge['earned'] == true
+                    ? AppTheme.primary.withOpacity(0.2)
+                    : AppTheme.glassLight,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                badge['tier'],
+                style: TextStyle(
+                  color: badge['earned'] == true
+                      ? AppTheme.primary
+                      : AppTheme.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              badge['description'],
+              style: const TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 14,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            if (badge['earned'] != true) ...[
+              const SizedBox(height: 16),
+              const Divider(color: AppTheme.border),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Progress',
+                    style:
+                        TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                  ),
+                  Text(
+                    '${badge['progress']}/${badge['target']}',
+                    style: const TextStyle(
+                      color: AppTheme.primary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: LinearProgressIndicator(
+                  value: (badge['progress'] as int) / (badge['target'] as int),
+                  backgroundColor: AppTheme.border,
+                  valueColor:
+                      const AlwaysStoppedAnimation<Color>(AppTheme.primary),
+                  minHeight: 8,
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ============ TAB 4: SAVES (BOOKMARKS) ============
+  Widget _savesTab() {
+    if (bookmarks.isEmpty) {
+      return _buildEmptyState(
+        icon: Icons.bookmark_border_rounded,
+        title: 'No saved spots yet',
+        subtitle: 'Bookmark your favorite restaurants for quick access',
+        actionLabel: 'Explore Restaurants',
+        onAction: () => context.go('/'),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: bookmarks.length,
+      itemBuilder: (_, i) {
+        final bookmark = bookmarks[i];
+        return _buildBookmarkCard(bookmark);
+      },
+    );
+  }
+
+  Widget _buildBookmarkCard(Map bookmark) {
+    final cuisines = bookmark['cuisine'] as List? ?? [];
+    final restaurantId = bookmark['restaurantId'] ??
+        bookmark['restaurantid'] ??
+        bookmark['restaurant_id'];
+    final bookmarkId = bookmark['id'];
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.card,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(16),
+        leading: ClipRRect(
+          borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+          child: bookmark['logoImage'] != null &&
+                  bookmark['logoImage'].toString().isNotEmpty
+              ? Image.network(bookmark['logoImage'],
+                  width: 60,
+                  height: 60,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) =>
+                      _buildPlaceholderIcon(icon: Icons.restaurant))
+              : _buildPlaceholderIcon(icon: Icons.restaurant),
+        ),
+        title: Text(
+          bookmark['name'] ?? 'Restaurant',
+          style: const TextStyle(
+              color: AppTheme.textPrimary,
+              fontWeight: FontWeight.bold,
+              fontSize: 16),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.location_on,
+                    size: 14, color: AppTheme.textSecondary),
+                const SizedBox(width: 4),
+                Text(
+                  bookmark['area'] ?? '',
+                  style: const TextStyle(
+                      color: AppTheme.textSecondary, fontSize: 13),
+                ),
+              ],
+            ),
+            if (cuisines.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: cuisines.take(3).map((cuisine) {
+                  return Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border:
+                          Border.all(color: AppTheme.primary.withOpacity(0.3)),
+                    ),
+                    child: Text(
+                      cuisine.toString(),
+                      style: const TextStyle(
+                        color: AppTheme.primary,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ],
+        ),
+        trailing: IconButton(
+          icon: const Icon(Icons.bookmark, color: AppTheme.primary, size: 24),
+          onPressed: () => _confirmRemoveBookmark(
+              restaurantId?.toString() ?? bookmarkId?.toString() ?? '',
+              bookmark['name']),
+        ),
+        onTap: () {
+          // Navigate to restaurant detail
+          if (restaurantId != null) {
+            context.push('/restaurant/$restaurantId');
+          }
+        },
+      ),
+    );
+  }
+
+  void _confirmRemoveBookmark(String restaurantId, String name) {
+    if (restaurantId.isEmpty) {
+      _toast('Invalid restaurant ID', isError: true);
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.card,
+        title: const Text('Remove Bookmark?',
+            style: TextStyle(color: Colors.white)),
+        content: Text(
+          'Remove "$name" from your saved restaurants?',
+          style: const TextStyle(color: AppTheme.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              removeBookmark(restaurantId);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Remove', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ============ TAB 5: FRIENDS ============
+  Widget _friendsTab() {
+    return Column(
+      children: [
+        // Action buttons
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: AppTheme.border)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _toast('Add from contacts coming soon'),
+                  icon: const Icon(Icons.contact_phone, size: 18),
+                  label: const Text('Phone Book'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppTheme.primary,
+                    side: const BorderSide(color: AppTheme.primary),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () => _toast('Search friends coming soon'),
+                  icon: const Icon(Icons.search, size: 18),
+                  label: const Text('Search Friends'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.secondary,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: friends.isEmpty
+              ? _buildEmptyState(
+                  icon: Icons.people_outline_rounded,
+                  title: 'No friends yet',
+                  subtitle: 'Connect with other SipZy users',
+                  actionLabel: 'Find Friends',
+                  onAction: () => _toast('Friend search coming soon'),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: friends.length,
+                  itemBuilder: (_, i) {
+                    final friend = friends[i];
+                    return _buildFriendCard(friend);
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFriendCard(Map friend) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.card,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        border: Border.all(color: AppTheme.border),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(16),
+        leading: Container(
+          padding: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const LinearGradient(
+              colors: [AppTheme.primary, AppTheme.secondary],
+            ),
+          ),
+          child: CircleAvatar(
+            radius: 28,
+            backgroundColor: AppTheme.background,
+            child: friend['avatar'] != null &&
+                    friend['avatar'].toString().isNotEmpty
+                ? ClipOval(
+                    child: Image.network(friend['avatar'],
+                        width: 56, height: 56, fit: BoxFit.cover))
+                : Text(
+                    friend['name'][0].toUpperCase(),
+                    style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primary),
+                  ),
+          ),
+        ),
+        title: Text(
+          friend['name'] ?? 'User',
+          style: const TextStyle(
+              color: AppTheme.textPrimary,
+              fontWeight: FontWeight.bold,
+              fontSize: 16),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 4),
+            Text(
+              '@${friend['username'] ?? 'user'}',
+              style:
+                  const TextStyle(color: AppTheme.textTertiary, fontSize: 12),
+            ),
+            if (friend['mutualFriends'] != null &&
+                friend['mutualFriends'] > 0) ...[
+              const SizedBox(height: 4),
+              Text(
+                '${friend['mutualFriends']} mutual friends',
+                style: const TextStyle(
+                    color: AppTheme.textSecondary, fontSize: 12),
+              ),
+            ],
+          ],
+        ),
+        trailing: const Icon(Icons.chevron_right, color: AppTheme.textTertiary),
+        onTap: () {
+          // Navigate to friend's public profile
+          _toast('View profile coming soon');
+        },
+      ),
+    );
+  }
+
+  // ============ SHARED WIDGETS ============
   Widget _buildLoadingSkeleton() {
     return Center(
       child: Column(
@@ -553,22 +2180,28 @@ class _SocialPageState extends State<SocialPage>
           Shimmer.fromColors(
             baseColor: AppTheme.card,
             highlightColor: AppTheme.glassLight,
-            child: const CircleAvatar(
-              radius: 48,
-              backgroundColor: AppTheme.card,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Shimmer.fromColors(
-            baseColor: AppTheme.card,
-            highlightColor: AppTheme.glassLight,
-            child: Container(
-              width: 150,
-              height: 24,
-              decoration: BoxDecoration(
-                color: AppTheme.card,
-                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-              ),
+            child: Column(
+              children: [
+                const CircleAvatar(radius: 48, backgroundColor: AppTheme.card),
+                const SizedBox(height: 16),
+                Container(
+                  width: 150,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    color: AppTheme.card,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  width: 100,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: AppTheme.card,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -583,342 +2216,115 @@ class _SocialPageState extends State<SocialPage>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Icons.cloud_off_rounded,
-              size: 64,
-              color: AppTheme.textTertiary,
-            ),
+            const Icon(Icons.cloud_off_rounded,
+                size: 64, color: AppTheme.textTertiary),
             const SizedBox(height: 16),
-            Text(
-              'Unable to load profile',
-              style: Theme.of(context).textTheme.titleMedium,
-              textAlign: TextAlign.center,
-            ),
+            Text('Unable to load profile',
+                style: Theme.of(context).textTheme.titleMedium,
+                textAlign: TextAlign.center),
             const SizedBox(height: 8),
-            Text(
-              'Check your connection and try again',
-              style: Theme.of(context).textTheme.bodySmall,
-              textAlign: TextAlign.center,
-            ),
+            Text('Check your connection and try again',
+                style: Theme.of(context).textTheme.bodySmall,
+                textAlign: TextAlign.center),
             const SizedBox(height: 24),
             AppTheme.gradientButtonAmber(
-              onPressed: fetchAll,
-              child: const Text('Retry'),
-            ),
+                onPressed: fetchAll, child: const Text('Retry')),
           ],
         ),
       ),
     );
   }
 
-  Widget _header() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: AppTheme.border),
-        ),
-      ),
-      child: Column(
-        children: [
-          CircleAvatar(
-            radius: 40,
-            backgroundColor: AppTheme.primary,
-            child: Text(
-              widget.user['name']?[0]?.toUpperCase() ?? '?',
-              style: const TextStyle(fontSize: 28, color: Colors.black),
+  Widget _buildEmptyState({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) {
+    return Center(
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    AppTheme.primary.withOpacity(0.2),
+                    Colors.transparent
+                  ],
+                ),
+              ),
+              child: Icon(icon, size: 64, color: AppTheme.textTertiary),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            widget.user['name'] ?? 'User',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          Text(
-            widget.user['phone'] ?? widget.user['email'] ?? '',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _stat('Ratings', stats['ratingsCount'] ?? 0),
-              _stat('Friends', stats['friendsCount'] ?? 0),
-              _stat('Saves', stats['bookmarkCount'] ?? 0),
+            const SizedBox(height: 24),
+            Text(title,
+                style: Theme.of(context).textTheme.titleLarge,
+                textAlign: TextAlign.center),
+            const SizedBox(height: 8),
+            Text(subtitle,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(color: AppTheme.textSecondary),
+                textAlign: TextAlign.center),
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(height: 24),
+              AppTheme.gradientButtonAmber(
+                onPressed: onAction,
+                child: Text(actionLabel),
+              ),
             ],
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            height: 44,
-            child: ElevatedButton.icon(
-              onPressed: logout,
-              icon: const Icon(Icons.logout_rounded, size: 16),
-              label: const Text('Logout'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red.shade600,
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _stat(String label, int value) {
-    return Column(
-      children: [
-        Text(
-          '$value',
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
-      ],
+  Widget _buildPlaceholderIcon({IconData? icon}) {
+    return Container(
+      width: 60,
+      height: 60,
+      decoration: BoxDecoration(
+        color: AppTheme.glassLight,
+        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+      ),
+      child: Icon(icon ?? Icons.local_bar_rounded,
+          color: AppTheme.textTertiary, size: 28),
     );
   }
 
-  Widget _diaryTab() {
-    if (diaryEntries.isEmpty) {
-      return Center(
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(
-                  Icons.book_outlined,
-                  size: 64,
-                  color: AppTheme.textTertiary,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'No diary entries yet',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Tap + to add your first entry',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
+  String _formatDate(String dateStr) {
+    try {
+      final date = DateTime.parse(dateStr);
+      return '${date.day}/${date.month}/${date.year}';
+    } catch (e) {
+      return dateStr;
     }
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: diaryEntries.length,
-      itemBuilder: (_, i) {
-        final entry = diaryEntries[i];
-        final entryId = entry['entryid'] ?? entry['entryId'] ?? entry['id'];
-        final bevName = entry['bevname'] ?? entry['bevName'] ?? 'Unknown';
-        final restaurant = entry['restaurant'] ?? '';
-        final rating = entry['rating'] ?? 0;
-        final notes = entry['notes'] ?? '';
-        final image = entry['image'];
-
-        return Card(
-          color: AppTheme.card,
-          margin: const EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            leading: image != null && image.toString().isNotEmpty
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-                    child: Image.network(
-                      image,
-                      width: 50,
-                      height: 50,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const Icon(
-                          Icons.local_bar_rounded,
-                          color: AppTheme.textSecondary),
-                    ),
-                  )
-                : const Icon(Icons.local_bar_rounded,
-                    color: AppTheme.textSecondary),
-            title: Text(
-              bevName,
-              style: const TextStyle(color: AppTheme.textPrimary),
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  restaurant,
-                  style: const TextStyle(color: AppTheme.textSecondary),
-                ),
-                if (notes.isNotEmpty)
-                  Text(
-                    notes,
-                    style: const TextStyle(
-                        color: AppTheme.textTertiary, fontSize: 12),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-              ],
-            ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '$rating',
-                  style: const TextStyle(
-                      color: AppTheme.primary, fontWeight: FontWeight.bold),
-                ),
-                const Icon(Icons.star, color: AppTheme.primary, size: 16),
-                IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.red, size: 20),
-                  onPressed: () => deleteDiary(entryId.toString()),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
   }
 
-  Widget _savesTab() {
-    if (bookmarks.isEmpty) {
-      return Center(
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(
-                  Icons.bookmark_border_rounded,
-                  size: 64,
-                  color: AppTheme.textTertiary,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'No bookmarks yet',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Save your favorite places',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
+  String _formatDateTime(String dateStr) {
+    try {
+      final date = DateTime.parse(dateStr);
+      final now = DateTime.now();
+      final diff = now.difference(date);
+
+      if (diff.inDays == 0) {
+        return 'Today at ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+      } else if (diff.inDays == 1) {
+        return 'Yesterday';
+      } else if (diff.inDays < 7) {
+        return '${diff.inDays} days ago';
+      } else {
+        return '${date.day}/${date.month}/${date.year}';
+      }
+    } catch (e) {
+      return dateStr;
     }
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: bookmarks.length,
-      itemBuilder: (_, i) {
-        final bookmark = bookmarks[i];
-        final name = bookmark['name'] ?? 'Restaurant';
-        final address = bookmark['address'] ?? bookmark['area'] ?? '';
-        final logoImage = bookmark['logoimage'] ?? bookmark['logoImage'];
-
-        return Card(
-          color: AppTheme.card,
-          margin: const EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            leading: logoImage != null && logoImage.toString().isNotEmpty
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-                    child: Image.network(
-                      logoImage,
-                      width: 50,
-                      height: 50,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => const Icon(
-                          Icons.restaurant_rounded,
-                          color: AppTheme.textSecondary),
-                    ),
-                  )
-                : const Icon(Icons.restaurant_rounded,
-                    color: AppTheme.textSecondary),
-            title: Text(
-              name,
-              style: const TextStyle(color: AppTheme.textPrimary),
-            ),
-            subtitle: Text(
-              address,
-              style: const TextStyle(color: AppTheme.textSecondary),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _friendsTab() {
-    if (friends.isEmpty) {
-      return Center(
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(
-                  Icons.people_outline_rounded,
-                  size: 64,
-                  color: AppTheme.textTertiary,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'No friends yet',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Connect with other SipZy users',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: friends.length,
-      itemBuilder: (_, i) {
-        final friend = friends[i];
-        final name = friend['name'] ?? 'User';
-        final phone = friend['phone'] ?? '';
-
-        return Card(
-          color: AppTheme.card,
-          margin: const EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: AppTheme.secondary,
-              child: Text(
-                name[0].toUpperCase(),
-                style: const TextStyle(color: Colors.white),
-              ),
-            ),
-            title: Text(
-              name,
-              style: const TextStyle(color: AppTheme.textPrimary),
-            ),
-            subtitle: Text(
-              phone,
-              style: const TextStyle(color: AppTheme.textSecondary),
-            ),
-          ),
-        );
-      },
-    );
   }
 }

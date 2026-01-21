@@ -30,31 +30,49 @@ class _ExpertTasksPageState extends State<ExpertTasksPage> {
   }
 
   Future<void> fetchTasks() async {
-    setState(() => loading = true);
+    // setState(() => loading = true);
 
-    try {
-      final responses = await Future.wait([
-        http.get(
-          Uri.parse('$api/expert/${widget.expert['id']}/assigned-restaurants'),
-        ),
-        http.get(
-          Uri.parse('$api/expert/${widget.expert['id']}/completed-tasks'),
-        ),
-      ]);
+    // try {
+    //   final responses = await Future.wait([
+    //     http.get(
+    //       Uri.parse('$api/expert/${widget.expert['id']}/assigned-restaurants'),
+    //     ),
+    //     http.get(
+    //       Uri.parse('$api/expert/${widget.expert['id']}/completed-tasks'),
+    //     ),
+    //   ]);
 
-      if (mounted) {
-        setState(() {
-          assignedRestaurants = jsonDecode(responses[0].body);
-          completedTasks = jsonDecode(responses[1].body);
-        });
-      }
-    } catch (_) {
-      _toast('Failed to load tasks', error: true);
-    } finally {
-      if (mounted) {
-        setState(() => loading = false);
-      }
-    }
+    //   if (mounted) {
+    //     setState(() {
+    //       assignedRestaurants = jsonDecode(responses[0].body);
+    //       completedTasks = jsonDecode(responses[1].body);
+    //     });
+    //   }
+    // } catch (_) {
+    //   _toast('Failed to load tasks', error: true);
+    // } finally {
+    //   if (mounted) {
+    //     setState(() => loading = false);
+    //   }
+    // }
+
+    setState(() {
+      assignedRestaurants = [
+        {
+          'id': 1,
+          'name': 'BSE',
+          'area': 'Indiranagar',
+          'image': '',
+          'cuisine': ['Continental']
+        },
+      ];
+
+      completedTasks = [
+        {'restaurant_name': 'Toit', 'beverages_rated': 8, 'time': '2h ago'},
+      ];
+
+      loading = false;
+    });
   }
 
   void _toast(String msg, {bool error = false}) {

@@ -89,78 +89,145 @@ class _RestaurantDetailState extends State<RestaurantDetail>
   }
 
   Future<void> fetchRestaurant() async {
+    // setState(() {
+    //   loading = true;
+    //   hasError = false;
+    // });
+
+    // try {
+    //   final headers = await _getHeaders();
+
+    //   // Fetch restaurant details
+    //   final restaurantRes = await http
+    //       .get(
+    //         Uri.parse(
+    //             '${EnvConfig.apiBaseUrl}/restaurants/${widget.restaurantId}'),
+    //         headers: headers,
+    //       )
+    //       .timeout(const Duration(seconds: 15));
+
+    //   if (restaurantRes.statusCode == 200) {
+    //     final data = jsonDecode(restaurantRes.body);
+    //     if (mounted) {
+    //       setState(() {
+    //         restaurant = data is Map &&
+    //                 data.containsKey('success') &&
+    //                 data['success'] == true
+    //             ? data['data']
+    //             : data;
+    //       });
+    //     }
+    //   }
+
+    //   // Fetch beverages
+    //   final beveragesRes = await http
+    //       .get(
+    //         Uri.parse(
+    //             '${EnvConfig.apiBaseUrl}/restaurants/${widget.restaurantId}/beverages'),
+    //         headers: headers,
+    //       )
+    //       .timeout(const Duration(seconds: 15));
+
+    //   if (beveragesRes.statusCode == 200) {
+    //     final data = jsonDecode(beveragesRes.body);
+    //     if (mounted) {
+    //       setState(() {
+    //         beverages = data is Map &&
+    //                 data.containsKey('success') &&
+    //                 data['success'] == true
+    //             ? (data['data'] as List? ?? [])
+    //             : (data is List ? data : []);
+
+    //         // Sort beverages for different sections
+    //         _categorizeBeverages();
+    //       });
+    //       filterAndSort();
+    //     }
+    //   }
+
+    //   // Fetch events for this restaurant
+    //   await _fetchRestaurantEvents();
+
+    //   // Fetch expert recommendations
+    //   await _fetchExpertRecommendations();
+    // } catch (e) {
+    //   print('❌ Fetch restaurant error: $e');
+    //   if (mounted) {
+    //     setState(() => hasError = true);
+    //     _toast('Failed to load restaurant', isError: true);
+    //   }
+    // } finally {
+    //   if (mounted) {
+    //     setState(() => loading = false);
+    //   }
+    // }
+
+    // DUMMY DATA
+
     setState(() {
-      loading = true;
-      hasError = false;
+      restaurant = {
+        'id': widget.restaurantId,
+        'name': 'The Bar Stock Exchange',
+        'image': '',
+        'area': 'Indiranagar',
+        'distance': 2.5,
+        'sipzy_rating': 4.5,
+        'cost_for_two': 2000,
+        'cuisine': ['Continental', 'Asian'],
+        'phone': '+918012345678',
+        'amenities': ['WiFi', 'Parking', 'Live Music'],
+        'photos': [],
+      };
+
+      beverages = [
+        {
+          'id': 1,
+          'name': 'Old Fashioned',
+          'price': 450,
+          'photo': '',
+          'category': 'alcoholic',
+          'sipzy_rating': 4.5,
+          'ratings': {'avgHuman': 4.2}
+        },
+        {
+          'id': 2,
+          'name': 'Mojito',
+          'price': 350,
+          'photo': '',
+          'category': 'alcoholic',
+          'sipzy_rating': 4.3,
+          'ratings': {'avgHuman': 4.0}
+        },
+        {
+          'id': 3,
+          'name': 'Espresso',
+          'price': 150,
+          'photo': '',
+          'category': 'non-alcoholic',
+          'sipzy_rating': 4.0,
+          'ratings': {'avgHuman': 3.8}
+        },
+      ];
+
+      _categorizeBeverages();
+
+      filterAndSort();
+
+      events = [
+        {
+          'id': 1,
+          'name': 'Live Jazz Night',
+          'description': 'Enjoy smooth jazz every Friday',
+          'eventdate': '2026-01-24'
+        }
+      ];
+
+      expertRecommendations = [
+        {'id': 1, 'name': 'Rajesh Kumar', 'avatar': '', 'avg_score_given': 4.5}
+      ];
+
+      loading = false;
     });
-
-    try {
-      final headers = await _getHeaders();
-
-      // Fetch restaurant details
-      final restaurantRes = await http
-          .get(
-            Uri.parse(
-                '${EnvConfig.apiBaseUrl}/restaurants/${widget.restaurantId}'),
-            headers: headers,
-          )
-          .timeout(const Duration(seconds: 15));
-
-      if (restaurantRes.statusCode == 200) {
-        final data = jsonDecode(restaurantRes.body);
-        if (mounted) {
-          setState(() {
-            restaurant = data is Map &&
-                    data.containsKey('success') &&
-                    data['success'] == true
-                ? data['data']
-                : data;
-          });
-        }
-      }
-
-      // Fetch beverages
-      final beveragesRes = await http
-          .get(
-            Uri.parse(
-                '${EnvConfig.apiBaseUrl}/restaurants/${widget.restaurantId}/beverages'),
-            headers: headers,
-          )
-          .timeout(const Duration(seconds: 15));
-
-      if (beveragesRes.statusCode == 200) {
-        final data = jsonDecode(beveragesRes.body);
-        if (mounted) {
-          setState(() {
-            beverages = data is Map &&
-                    data.containsKey('success') &&
-                    data['success'] == true
-                ? (data['data'] as List? ?? [])
-                : (data is List ? data : []);
-
-            // Sort beverages for different sections
-            _categorizeBeverages();
-          });
-          filterAndSort();
-        }
-      }
-
-      // Fetch events for this restaurant
-      await _fetchRestaurantEvents();
-
-      // Fetch expert recommendations
-      await _fetchExpertRecommendations();
-    } catch (e) {
-      print('❌ Fetch restaurant error: $e');
-      if (mounted) {
-        setState(() => hasError = true);
-        _toast('Failed to load restaurant', isError: true);
-      }
-    } finally {
-      if (mounted) {
-        setState(() => loading = false);
-      }
-    }
   }
 
   void _categorizeBeverages() {

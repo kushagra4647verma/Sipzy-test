@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../shared/navigation/bottom_nav.dart';
 import '../../core/theme/app_theme.dart';
 import '../../services/api_service.dart';
+import '../expert/expert_page.dart';
 
 class HomePage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -116,72 +117,110 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> fetchRestaurants() async {
-    try {
-      final headers = await _getHeaders();
+    // try {
+    //   final headers = await _getHeaders();
 
-      // Build query params
-      final params = <String, String>{};
-      if (searchQuery.isNotEmpty) params['search'] = searchQuery;
-      if (selectedCuisines.isNotEmpty) {
-        params['cuisine'] = selectedCuisines.first;
-      }
-      if (minRating > 0) params['min_rating'] = minRating.toString();
-      if (maxDistance < 10) params['max_distance'] = maxDistance.toString();
-      params['sort_by'] = sortBy;
+    //   // Build query params
+    //   final params = <String, String>{};
+    //   if (searchQuery.isNotEmpty) params['search'] = searchQuery;
+    //   if (selectedCuisines.isNotEmpty) {
+    //     params['cuisine'] = selectedCuisines.first;
+    //   }
+    //   if (minRating > 0) params['min_rating'] = minRating.toString();
+    //   if (maxDistance < 10) params['max_distance'] = maxDistance.toString();
+    //   params['sort_by'] = sortBy;
 
-      final uri = Uri.parse(ApiService.restaurantService)
-          .replace(queryParameters: params);
+    //   final uri = Uri.parse(ApiService.restaurantService)
+    //       .replace(queryParameters: params);
 
-      print('📡 Fetching restaurants from: $uri');
+    //   print('📡 Fetching restaurants from: $uri');
 
-      final response = await http.get(uri, headers: headers).timeout(
-            const Duration(seconds: 15),
-          );
+    //   final response = await http.get(uri, headers: headers).timeout(
+    //         const Duration(seconds: 15),
+    //       );
 
-      print('📡 Response status: ${response.statusCode}');
+    //   print('📡 Response status: ${response.statusCode}');
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (mounted) {
-          setState(() {
-            restaurants = data['success'] == true
-                ? (data['data'] as List? ?? [])
-                : (data is List ? data : []);
-            hasError = false;
-          });
-        }
+    //   if (response.statusCode == 200) {
+    //     final data = jsonDecode(response.body);
+    //     if (mounted) {
+    //       setState(() {
+    //         restaurants = data['success'] == true
+    //             ? (data['data'] as List? ?? [])
+    //             : (data is List ? data : []);
+    //         hasError = false;
+    //       });
+    //     }
 
-        // Fetch featured and trending only if no search
-        if (searchQuery.isEmpty && selectedCuisines.isEmpty && minRating == 0) {
-          await _fetchFeaturedAndTrending(headers);
-        } else {
-          if (mounted) {
-            setState(() {
-              featuredRestaurants = [];
-              trendingRestaurants = [];
-            });
-          }
-        }
-      } else if (response.statusCode == 401) {
-        print('❌ Authentication failed - session may have expired');
-        if (mounted) {
-          _toast('Session expired. Please login again.', isError: true);
-          context.go('/auth');
-        }
-      } else {
-        throw Exception('Failed to load restaurants: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Fetch restaurants error: $e');
-      if (mounted) {
-        setState(() => hasError = true);
-        _toast('Failed to load restaurants', isError: true);
-      }
-    } finally {
-      if (mounted) {
-        setState(() => loading = false);
-      }
-    }
+    //     // Fetch featured and trending only if no search
+    //     if (searchQuery.isEmpty && selectedCuisines.isEmpty && minRating == 0) {
+    //       await _fetchFeaturedAndTrending(headers);
+    //     } else {
+    //       if (mounted) {
+    //         setState(() {
+    //           featuredRestaurants = [];
+    //           trendingRestaurants = [];
+    //         });
+    //       }
+    //     }
+    //   } else if (response.statusCode == 401) {
+    //     print('❌ Authentication failed - session may have expired');
+    //     if (mounted) {
+    //       _toast('Session expired. Please login again.', isError: true);
+    //       context.go('/auth');
+    //     }
+    //   } else {
+    //     throw Exception('Failed to load restaurants: ${response.statusCode}');
+    //   }
+    // } catch (e) {
+    //   print('❌ Fetch restaurants error: $e');
+    //   if (mounted) {
+    //     setState(() => hasError = true);
+    //     _toast('Failed to load restaurants', isError: true);
+    //   }
+    // } finally {
+    //   if (mounted) {
+    //     setState(() => loading = false);
+    //   }
+    // }
+
+    setState(() {
+      restaurants = [
+        {
+          'id': 1,
+          'name': 'The Bar Stock Exchange',
+          'area': 'Indiranagar',
+          'distance': 2.5,
+          'sipzy_rating': 4.5,
+          'cost_for_two': 2000,
+          'logoImage': '',
+          'cuisine': ['Continental', 'Asian']
+        },
+        {
+          'id': 2,
+          'name': 'Toit Brewpub',
+          'area': 'Koramangala',
+          'distance': 3.2,
+          'sipzy_rating': 4.3,
+          'cost_for_two': 1800,
+          'logoImage': '',
+          'cuisine': ['Italian', 'Continental']
+        },
+        {
+          'id': 3,
+          'name': 'The Pump House',
+          'area': 'Whitefield',
+          'distance': 8.5,
+          'sipzy_rating': 4.7,
+          'cost_for_two': 2500,
+          'logoImage': '',
+          'cuisine': ['Indian', 'Continental']
+        },
+      ];
+      featuredRestaurants = restaurants.take(2).toList();
+      trendingRestaurants = restaurants.skip(2).take(1).toList();
+      loading = false;
+    });
   }
 
   Future<void> _fetchFeaturedAndTrending(Map<String, String> headers) async {
@@ -200,34 +239,38 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> fetchBookmarks() async {
-    try {
-      final headers = await _getHeaders();
-      final userId = _supabase.auth.currentUser?.id ?? widget.user['id'];
+    // try {
+    //   final headers = await _getHeaders();
+    //   final userId = _supabase.auth.currentUser?.id ?? widget.user['id'];
 
-      final response = await http.get(
-        Uri.parse('${ApiService.userService}/$userId/bookmarks'),
-        headers: headers,
-      );
+    //   final response = await http.get(
+    //     Uri.parse('${ApiService.userService}/$userId/bookmarks'),
+    //     headers: headers,
+    //   );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final bookmarks = data['success'] == true
-            ? (data['data'] as List? ?? [])
-            : (data is List ? data : []);
+    //   if (response.statusCode == 200) {
+    //     final data = jsonDecode(response.body);
+    //     final bookmarks = data['success'] == true
+    //         ? (data['data'] as List? ?? [])
+    //         : (data is List ? data : []);
 
-        if (mounted) {
-          setState(() {
-            bookmarkedIds = bookmarks
-                .map((e) =>
-                    (e['restaurantId'] ?? e['restaurantid'] ?? e['id']) as num)
-                .map((e) => e.toInt())
-                .toList();
-          });
-        }
-      }
-    } catch (e) {
-      print('⚠️ Failed to fetch bookmarks: $e');
-    }
+    //     if (mounted) {
+    //       setState(() {
+    //         bookmarkedIds = bookmarks
+    //             .map((e) =>
+    //                 (e['restaurantId'] ?? e['restaurantid'] ?? e['id']) as num)
+    //             .map((e) => e.toInt())
+    //             .toList();
+    //       });
+    //     }
+    //   }
+    // } catch (e) {
+    //   print('⚠️ Failed to fetch bookmarks: $e');
+    // }
+
+    setState(() {
+      bookmarkedIds = [1]; // Restaurant ID 1 is bookmarked
+    });
   }
 
   Future<void> toggleBookmark(String restaurantId) async {
@@ -743,7 +786,14 @@ class _HomePageState extends State<HomePage> {
 
               // Expert Corner Button
               InkWell(
-                onTap: () => context.push('/expert-corner'),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ExpertCornerPage(user: widget.user),
+                    ),
+                  );
+                },
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
@@ -800,17 +850,16 @@ class _HomePageState extends State<HomePage> {
                 fetchRestaurants();
               },
               style: const TextStyle(color: AppTheme.textPrimary),
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 hintText: 'Search restaurants, cuisines, areas...',
-                hintStyle: const TextStyle(color: AppTheme.textTertiary),
-                prefixIcon:
-                    const Icon(Icons.search, color: AppTheme.textSecondary),
-                suffixIcon: const Icon(
+                hintStyle: TextStyle(color: AppTheme.textTertiary),
+                prefixIcon: Icon(Icons.search, color: AppTheme.textSecondary),
+                suffixIcon: Icon(
                   Icons.mic_rounded,
                   color: AppTheme.primary,
                 ),
                 border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(
+                contentPadding: EdgeInsets.symmetric(
                   horizontal: AppTheme.spacing16,
                   vertical: AppTheme.spacing12,
                 ),

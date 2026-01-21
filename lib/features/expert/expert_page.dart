@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
+import './expert_profile_detail_page.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../config/env_config.dart';
@@ -51,55 +52,80 @@ class _ExpertCornerPageState extends State<ExpertCornerPage> {
   }
 
   Future<void> fetchExperts() async {
+    // setState(() {
+    //   loading = true;
+    //   hasError = false;
+    // });
+
+    // try {
+    //   final headers = await _getHeaders();
+    //   final uri = Uri.parse('${EnvConfig.apiBaseUrl}/experts');
+
+    //   print('📡 Fetching experts from: $uri');
+
+    //   final response = await http.get(uri, headers: headers).timeout(
+    //         const Duration(seconds: 15),
+    //       );
+
+    //   print('📡 Response status: ${response.statusCode}');
+
+    //   if (response.statusCode == 200) {
+    //     final data = jsonDecode(response.body);
+    //     if (mounted) {
+    //       setState(() {
+    //         experts = data is Map &&
+    //                 data.containsKey('success') &&
+    //                 data['success'] == true
+    //             ? (data['data'] as List? ?? [])
+    //             : (data is List ? data : []);
+    //         filteredExperts = experts;
+    //         hasError = false;
+    //       });
+    //     }
+    //   } else if (response.statusCode == 401) {
+    //     if (mounted) {
+    //       _toast('Session expired. Please login again.', isError: true);
+    //       context.go('/auth');
+    //     }
+    //   } else {
+    //     throw Exception('Failed to load experts: ${response.statusCode}');
+    //   }
+    // } catch (e) {
+    //   print('❌ Fetch experts error: $e');
+    //   if (mounted) {
+    //     setState(() => hasError = true);
+    //     _toast('Failed to load experts', isError: true);
+    //   }
+    // } finally {
+    //   if (mounted) {
+    //     setState(() => loading = false);
+    //   }
+    // }
+
     setState(() {
-      loading = true;
-      hasError = false;
+      experts = [
+        {
+          'id': 1,
+          'name': 'Rajesh Kumar',
+          'specialization': 'Sommelier',
+          'avatar': '',
+          'avgRating': 4.5,
+          'totalRatings': 150,
+          'verified': true
+        },
+        {
+          'id': 2,
+          'name': 'Priya Sharma',
+          'specialization': 'Mixologist',
+          'avatar': '',
+          'avgRating': 4.7,
+          'totalRatings': 200,
+          'verified': true
+        },
+      ];
+      filteredExperts = experts;
+      loading = false;
     });
-
-    try {
-      final headers = await _getHeaders();
-      final uri = Uri.parse('${EnvConfig.apiBaseUrl}/experts');
-
-      print('📡 Fetching experts from: $uri');
-
-      final response = await http.get(uri, headers: headers).timeout(
-            const Duration(seconds: 15),
-          );
-
-      print('📡 Response status: ${response.statusCode}');
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (mounted) {
-          setState(() {
-            experts = data is Map &&
-                    data.containsKey('success') &&
-                    data['success'] == true
-                ? (data['data'] as List? ?? [])
-                : (data is List ? data : []);
-            filteredExperts = experts;
-            hasError = false;
-          });
-        }
-      } else if (response.statusCode == 401) {
-        if (mounted) {
-          _toast('Session expired. Please login again.', isError: true);
-          context.go('/auth');
-        }
-      } else {
-        throw Exception('Failed to load experts: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Fetch experts error: $e');
-      if (mounted) {
-        setState(() => hasError = true);
-        _toast('Failed to load experts', isError: true);
-      }
-    } finally {
-      if (mounted) {
-        setState(() => loading = false);
-      }
-    }
   }
 
   void _filterExperts(String query) {
@@ -422,8 +448,15 @@ class _ExpertCornerPageState extends State<ExpertCornerPage> {
           // Arrow button
           IconButton(
             onPressed: () {
-              // Navigate to expert profile
-              context.push('/expert/${expert['id']}');
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ExpertProfileDetailPage(
+                    user: widget.user,
+                    expertId: expert['id'].toString(),
+                  ),
+                ),
+              );
             },
             icon: const Icon(
               Icons.arrow_forward_ios_rounded,

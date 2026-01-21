@@ -37,29 +37,45 @@ class _ExpertDashboardState extends State<ExpertDashboard> {
   }
 
   Future<void> fetchDashboardData() async {
-    setState(() => loading = true);
+    // setState(() => loading = true);
 
-    try {
-      final responses = await Future.wait([
-        http.get(
-          Uri.parse('$api/expert/${widget.expert['id']}/assigned-restaurants'),
-        ),
-        http.get(
-          Uri.parse('$api/expert/${widget.expert['id']}/recently-rated'),
-        ),
-        http.get(Uri.parse('$api/expert/${widget.expert['id']}/stats')),
-      ]);
+    // try {
+    //   final responses = await Future.wait([
+    //     http.get(
+    //       Uri.parse('$api/expert/${widget.expert['id']}/assigned-restaurants'),
+    //     ),
+    //     http.get(
+    //       Uri.parse('$api/expert/${widget.expert['id']}/recently-rated'),
+    //     ),
+    //     http.get(Uri.parse('$api/expert/${widget.expert['id']}/stats')),
+    //   ]);
 
-      setState(() {
-        assignedRestaurants = jsonDecode(responses[0].body);
-        recentlyRated = jsonDecode(responses[1].body);
-        stats = jsonDecode(responses[2].body);
-      });
-    } catch (_) {
-      _toast('Failed to load dashboard data', error: true);
-    } finally {
-      setState(() => loading = false);
-    }
+    //   setState(() {
+    //     assignedRestaurants = jsonDecode(responses[0].body);
+    //     recentlyRated = jsonDecode(responses[1].body);
+    //     stats = jsonDecode(responses[2].body);
+    //   });
+    // } catch (_) {
+    //   _toast('Failed to load dashboard data', error: true);
+    // } finally {
+    //   setState(() => loading = false);
+    // }
+
+    setState(() {
+      assignedRestaurants = [
+        {'id': 1, 'name': 'Toit Brewpub', 'area': 'Koramangala', 'image': ''},
+      ];
+
+      recentlyRated = {'weekly_count': 12, 'restaurants': []};
+
+      stats = {
+        'total_ratings': 45,
+        'avg_score_given': 4.3,
+        'beverages_this_week': 12,
+      };
+
+      loading = false;
+    });
   }
 
   void _toast(String msg, {bool error = false}) {

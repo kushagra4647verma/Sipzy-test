@@ -62,61 +62,80 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
   }
 
   Future<void> fetchBeverage() async {
+    // setState(() {
+    //   loading = true;
+    //   hasError = false;
+    // });
+
+    // try {
+    //   final headers = await _getHeaders();
+    //   final uri =
+    //       Uri.parse('${EnvConfig.apiBaseUrl}/beverages/${widget.beverageId}');
+
+    //   print('📡 Fetching beverage from: $uri');
+
+    //   final response = await http.get(uri, headers: headers).timeout(
+    //         const Duration(seconds: 15),
+    //       );
+
+    //   print('📡 Response status: ${response.statusCode}');
+    //   print('📡 Response body: ${response.body}');
+
+    //   if (response.statusCode == 200) {
+    //     final data = jsonDecode(response.body);
+
+    //     if (mounted) {
+    //       setState(() {
+    //         // Handle both response formats
+    //         if (data is Map &&
+    //             data.containsKey('success') &&
+    //             data['success'] == true) {
+    //           beverage = data['data'] as Map<String, dynamic>?;
+    //         } else if (data is Map) {
+    //           beverage = data.cast<String, dynamic>();
+    //         }
+
+    //         hasError = false;
+    //       });
+    //     }
+    //   } else if (response.statusCode == 401) {
+    //     if (mounted) {
+    //       _toast('Session expired. Please login again.', isError: true);
+    //       context.go('/auth');
+    //     }
+    //   } else {
+    //     throw Exception('Failed to load beverage: ${response.statusCode}');
+    //   }
+    // } catch (e) {
+    //   print('❌ Fetch beverage error: $e');
+    //   if (mounted) {
+    //     setState(() => hasError = true);
+    //     _toast('Failed to load beverage details', isError: true);
+    //   }
+    // } finally {
+    //   if (mounted) {
+    //     setState(() => loading = false);
+    //   }
+    // }
+
     setState(() {
-      loading = true;
-      hasError = false;
+      beverage = {
+        'id': widget.beverageId,
+        'name': 'Old Fashioned',
+        'photo': '',
+        'category': 'Whisky Cocktail',
+        'drinkType': 'Cocktail',
+        'price': 450,
+        'description': 'Classic bourbon cocktail',
+        'baseType': 'Whisky',
+        'ratings': {
+          'avgHuman': 4.2,
+          'counthuman': 45,
+          'avgexpert': 4.5,
+        }
+      };
+      loading = false;
     });
-
-    try {
-      final headers = await _getHeaders();
-      final uri =
-          Uri.parse('${EnvConfig.apiBaseUrl}/beverages/${widget.beverageId}');
-
-      print('📡 Fetching beverage from: $uri');
-
-      final response = await http.get(uri, headers: headers).timeout(
-            const Duration(seconds: 15),
-          );
-
-      print('📡 Response status: ${response.statusCode}');
-      print('📡 Response body: ${response.body}');
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-
-        if (mounted) {
-          setState(() {
-            // Handle both response formats
-            if (data is Map &&
-                data.containsKey('success') &&
-                data['success'] == true) {
-              beverage = data['data'] as Map<String, dynamic>?;
-            } else if (data is Map) {
-              beverage = data.cast<String, dynamic>();
-            }
-
-            hasError = false;
-          });
-        }
-      } else if (response.statusCode == 401) {
-        if (mounted) {
-          _toast('Session expired. Please login again.', isError: true);
-          context.go('/auth');
-        }
-      } else {
-        throw Exception('Failed to load beverage: ${response.statusCode}');
-      }
-    } catch (e) {
-      print('❌ Fetch beverage error: $e');
-      if (mounted) {
-        setState(() => hasError = true);
-        _toast('Failed to load beverage details', isError: true);
-      }
-    } finally {
-      if (mounted) {
-        setState(() => loading = false);
-      }
-    }
   }
 
   Future<void> submitRating() async {
@@ -155,6 +174,260 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
     } finally {
       setState(() => submitting = false);
     }
+  }
+
+  void _showRatingDialog() {
+    int selectedRating = 0;
+    String reviewText = '';
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: AppTheme.card,
+          title: const Text('Rate Bangalore Old Fashioned',
+              style: TextStyle(color: Colors.white)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Your Rating',
+                  style: TextStyle(color: AppTheme.textSecondary)),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(5, (index) {
+                  return IconButton(
+                    icon: Icon(
+                      index < selectedRating ? Icons.star : Icons.star_border,
+                      color: AppTheme.primary,
+                      size: 32,
+                    ),
+                    onPressed: () {
+                      setDialogState(() => selectedRating = index + 1);
+                    },
+                  );
+                }),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                onChanged: (v) => reviewText = v,
+                maxLines: 3,
+                style: const TextStyle(color: Colors.white),
+                decoration: const InputDecoration(
+                  hintText: 'Share your experience...',
+                  hintStyle: TextStyle(color: AppTheme.textTertiary),
+                  filled: true,
+                  fillColor: AppTheme.glassLight,
+                  border: OutlineInputBorder(borderSide: BorderSide.none),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (selectedRating > 0) {
+                  Navigator.pop(context);
+                  _toast('Rating submitted!');
+                  setState(() {
+                    // Update local rating
+                  });
+                } else {
+                  _toast('Please select a rating', isError: true);
+                }
+              },
+              style:
+                  ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
+              child: const Text('Submit Rating',
+                  style: TextStyle(color: Colors.black)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showExpertBreakdown() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: AppTheme.card,
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Expert Rating Breakdown',
+                      style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white)),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close, color: AppTheme.textTertiary),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              _buildBreakdownItem('Presentation', 4),
+              _buildBreakdownItem('Taste', 3),
+              _buildBreakdownItem('Ingredients', 3),
+              _buildBreakdownItem('Accuracy', 3),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBreakdownItem(String label, int value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(label,
+                  style: const TextStyle(
+                      color: AppTheme.textSecondary, fontSize: 14)),
+              Text('$value/5',
+                  style: const TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontWeight: FontWeight.bold)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: value / 5,
+              backgroundColor: AppTheme.border,
+              valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primary),
+              minHeight: 8,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCustomerReviews() {
+    final reviews = [
+      {
+        'user': 'Test User',
+        'rating': 4.5,
+        'comment': 'Great taste!',
+        'date': '12/12/2025'
+      },
+      {
+        'user': 'Test User',
+        'rating': 4.5,
+        'comment': 'Great taste!',
+        'date': '12/12/2025'
+      },
+      {'user': 'Test', 'rating': 4.0, 'comment': 'Test', 'date': '12/5/2025'},
+    ];
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: AppTheme.card,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Customer Reviews (${reviews.length})',
+                      style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white)),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close, color: AppTheme.textTertiary),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(
+              height: 400,
+              child: ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: reviews.length,
+                itemBuilder: (context, index) {
+                  final review = reviews[index];
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppTheme.glassLight,
+                      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              backgroundColor: AppTheme.secondary,
+                              child: Text(review['user'].toString()[0],
+                                  style: const TextStyle(color: Colors.white)),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(review['user'].toString(),
+                                      style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold)),
+                                  Text(review['date'].toString(),
+                                      style: const TextStyle(
+                                          color: AppTheme.textTertiary,
+                                          fontSize: 12)),
+                                ],
+                              ),
+                            ),
+                            Row(
+                              children: [
+                                const Icon(Icons.star,
+                                    color: AppTheme.primary, size: 16),
+                                const SizedBox(width: 4),
+                                Text('${review['rating']}',
+                                    style: const TextStyle(
+                                        color: AppTheme.primary,
+                                        fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Text(review['comment'].toString(),
+                            style:
+                                const TextStyle(color: AppTheme.textSecondary)),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _toast(String msg, {bool isError = false}) {
@@ -416,7 +689,15 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
     final ratingValue = (value is num ? value.toDouble() : 0.0);
 
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        {
+          if (label == 'Customer Rating') {
+            _showCustomerReviews();
+          } else if (label == 'Expert Rating') {
+            _showExpertBreakdown();
+          }
+        }
+      },
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -537,7 +818,7 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
             child: SizedBox(
               height: 48,
               child: AppTheme.gradientButtonAmber(
-                onPressed: () => setState(() => showRatingDialog = true),
+                onPressed: () => _showRatingDialog(),
                 child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [

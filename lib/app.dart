@@ -13,6 +13,7 @@ import 'features/beverage/beverage_detail_page.dart';
 import 'features/events/events_page.dart';
 import 'features/social/social_page.dart';
 import 'features/expert/expert_page.dart';
+import 'features/expert/expert_profile_detail_page.dart';
 
 // Expert
 import 'features/expert/expert_dashboard.dart';
@@ -184,6 +185,17 @@ class _SipZyAppState extends State<SipZyApp> {
         path: '/expert/tasks',
         name: 'expert-tasks',
         builder: (context, state) => ExpertTasksPage(expert: auth.expert!),
+      ),
+      GoRoute(
+        path: '/expert/:expertId',
+        builder: (context, state) {
+          final expertId = state.pathParameters['expertId']!;
+          final user = state.extra as Map<String, dynamic>? ?? {};
+          return ExpertProfileDetailPage(
+            user: user,
+            expertId: expertId,
+          );
+        },
       ),
       GoRoute(
         path: '/expert/profile',
