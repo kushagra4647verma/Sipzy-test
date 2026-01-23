@@ -431,15 +431,22 @@ class _ExpertProfileDetailPageState extends State<ExpertProfileDetailPage> {
             children: [
               Icon(Icons.history, color: AppTheme.primary, size: 20),
               SizedBox(width: 8),
-              Text('Recent Expert Ratings',
-                  style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white)),
+              Text(
+                'Recent Expert Ratings',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
-          ...expertRatings.map((rating) => Container(
+          ...expertRatings.map(
+            (rating) {
+              final photo = rating['beverages']?['photo'];
+
+              return Container(
                 margin: const EdgeInsets.only(bottom: 12),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -447,58 +454,115 @@ class _ExpertProfileDetailPageState extends State<ExpertProfileDetailPage> {
                   borderRadius: BorderRadius.circular(AppTheme.radiusLg),
                   border: Border.all(color: AppTheme.border),
                 ),
-                child: Column(
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            rating['beverages']['name'],
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16),
+                    // ================= IMAGE =================
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: photo != null && photo.toString().isNotEmpty
+                          ? Image.network(
+                              photo,
+                              width: 60,
+                              height: 60,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => _placeholderImage(),
+                            )
+                          : _placeholderImage(),
+                    ),
+
+                    const SizedBox(width: 12),
+
+                    // ================= CONTENT =================
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Title + Avg Rating
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  rating['beverages']?['name'] ?? 'Beverage',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.star,
+                                    color: AppTheme.primary,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${((rating['presentationRating'] + rating['tasteRating'] + rating['ingredientsRating'] + rating['accuracyRating']) / 4).toStringAsFixed(1)}',
+                                    style: const TextStyle(
+                                      color: AppTheme.primary,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
-                        ),
-                        Row(
-                          children: [
-                            const Icon(Icons.star,
-                                color: AppTheme.primary, size: 16),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${((rating['presentationRating'] + rating['tasteRating'] + rating['ingredientsRating'] + rating['accuracyRating']) / 4).toStringAsFixed(1)}',
-                              style: const TextStyle(
-                                  color: AppTheme.primary,
-                                  fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _buildRatingItem(
-                            'Presentation', rating['presentationRating']),
-                        _buildRatingItem('Taste', rating['tasteRating']),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _buildRatingItem(
-                            'Ingredients', rating['ingredientsRating']),
-                        _buildRatingItem('Accuracy', rating['accuracyRating']),
-                      ],
+
+                          const SizedBox(height: 12),
+
+                          // Ratings Row 1
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              _buildRatingItem(
+                                  'Presentation', rating['presentationRating']),
+                              _buildRatingItem('Taste', rating['tasteRating']),
+                            ],
+                          ),
+
+                          const SizedBox(height: 8),
+
+                          // Ratings Row 2
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              _buildRatingItem(
+                                  'Ingredients', rating['ingredientsRating']),
+                              _buildRatingItem(
+                                  'Accuracy', rating['accuracyRating']),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
-              )),
+              );
+            },
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _placeholderImage() {
+    return Container(
+      width: 60,
+      height: 60,
+      decoration: BoxDecoration(
+        color: AppTheme.glassLight,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: const Icon(
+        Icons.local_bar,
+        color: AppTheme.textTertiary,
+        size: 24,
       ),
     );
   }

@@ -473,22 +473,31 @@ class _RestaurantDetailState extends State<RestaurantDetail>
           ListView(
             padding: EdgeInsets.zero,
             children: [
+              // ================= HEADER =================
               _buildEnhancedHeader(),
               _buildRestaurantInfo(),
+
+              // ================= DISCOVERY FIRST =================
+              _buildToggleSearchSort(),
+              _buildActionButtons(), // Mix Magic, Filters, etc.
+              _buildBeveragesGrid(),
+
+              // ================= SOCIAL + TRUST =================
               _buildTopSipzySection(),
               _buildCustomerFavoritesSection(),
+              _buildExpertRecommendationsSection(),
+
+              // ================= DETAILS =================
               _buildAmenitiesSection(),
               _buildPhotoGallerySection(),
+              _buildFoodMenuGallery(), // NEW
               _buildEventsSection(),
-              _buildExpertRecommendationsSection(),
-              _buildToggleSearchSort(),
-              _buildActionButtons(), // ✅ ADDED: Action buttons with Mix Magic
-              _buildBeveragesGrid(),
+
               const SizedBox(height: 80),
             ],
           ),
 
-          // Invite Friends Modal
+          // ================= INVITE FRIENDS MODAL =================
           if (showInviteModal)
             InviteFriendsModal(
               open: showInviteModal,
@@ -951,6 +960,95 @@ class _RestaurantDetailState extends State<RestaurantDetail>
         ),
         const SizedBox(height: 16),
       ],
+    );
+  }
+
+  Widget _buildFoodMenuGallery() {
+    final menuPhotos = restaurant!['menu_photos'] as List? ?? [];
+    if (menuPhotos.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.all(16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Food Menu',
+                style: TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              TextButton(
+                onPressed: () => _showFullMenuGallery(),
+                child: Text('View All'),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(
+          height: 200,
+          child: ListView.separated(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            scrollDirection: Axis.horizontal,
+            itemCount: menuPhotos.length,
+            separatorBuilder: (_, __) => SizedBox(width: 12),
+            itemBuilder: (_, i) => ClipRRect(
+              borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+              child: Image.network(
+                menuPhotos[i]['url'],
+                width: 300,
+                height: 200,
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
+        ),
+        SizedBox(height: 16),
+      ],
+    );
+  }
+
+  void _showFullMenuGallery() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Food Menu',
+                    style: TextStyle(color: Colors.white, fontSize: 20)),
+                IconButton(
+                  icon: Icon(Icons.close, color: Colors.white),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            Expanded(
+              child: GridView.builder(
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                ),
+                itemCount: restaurant!['menu_photos'].length,
+                itemBuilder: (_, i) => Image.network(
+                  restaurant!['menu_photos'][i]['url'],
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

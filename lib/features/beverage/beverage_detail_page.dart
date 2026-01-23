@@ -257,34 +257,120 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
       builder: (context) => Dialog(
         backgroundColor: AppTheme.card,
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Expert Rating Breakdown',
+                  Text('Expert Rating Breakdown',
                       style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: Colors.white)),
                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close, color: AppTheme.textTertiary),
+                    icon: Icon(Icons.close, color: AppTheme.textTertiary),
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
-              _buildBreakdownItem('Presentation', 4),
-              _buildBreakdownItem('Taste', 3),
-              _buildBreakdownItem('Ingredients', 3),
-              _buildBreakdownItem('Accuracy', 3),
+              SizedBox(height: 16),
+              Text('Tap each category to see details',
+                  style:
+                      TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+              SizedBox(height: 24),
+              _buildExpandableBreakdownItem('Presentation', 4),
+              _buildExpandableBreakdownItem('Taste', 3),
+              _buildExpandableBreakdownItem('Ingredients', 3),
+              _buildExpandableBreakdownItem('Accuracy', 3),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildExpandableBreakdownItem(String label, int value) {
+    return StatefulBuilder(
+      builder: (context, setState) {
+        bool expanded = false;
+        return Padding(
+          padding: EdgeInsets.only(bottom: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              InkWell(
+                onTap: () => setState(() => expanded = !expanded),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Text(label,
+                            style: TextStyle(
+                                color: AppTheme.textSecondary, fontSize: 14)),
+                        SizedBox(width: 8),
+                        Icon(
+                          expanded ? Icons.expand_less : Icons.expand_more,
+                          size: 16,
+                          color: AppTheme.textTertiary,
+                        ),
+                      ],
+                    ),
+                    Text('$value/5',
+                        style: TextStyle(
+                            color: AppTheme.textPrimary,
+                            fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+              SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: value / 5,
+                  backgroundColor: AppTheme.border,
+                  valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primary),
+                  minHeight: 8,
+                ),
+              ),
+              if (expanded) ...[
+                SizedBox(height: 8),
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.glassLight,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Expert notes: ${_getExpertNotes(label)}',
+                    style:
+                        TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  String _getExpertNotes(String category) {
+    switch (category) {
+      case 'Presentation':
+        return 'Well-crafted garnish and glassware';
+      case 'Taste':
+        return 'Balanced flavors with good depth';
+      case 'Ingredients':
+        return 'Fresh, quality ingredients used';
+      case 'Accuracy':
+        return 'True to classic recipe';
+      default:
+        return 'No notes available';
+    }
   }
 
   Widget _buildBreakdownItem(String label, int value) {
@@ -814,6 +900,7 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
+          // ================= ADD RATING =================
           Expanded(
             child: SizedBox(
               height: 48,
@@ -837,8 +924,12 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
               ),
             ),
           ),
+
           const SizedBox(width: 12),
-          InkWell(
+
+          // ================= SHARE =================
+          _buildIconAction(
+            icon: Icons.share_rounded,
             onTap: () {
               showDialog(
                 context: context,
@@ -853,22 +944,40 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
                 ),
               );
             },
-            child: Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: AppTheme.glassLight,
-                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                border: Border.all(color: AppTheme.border),
-              ),
-              child: const Icon(
-                Icons.share_rounded,
-                color: AppTheme.primary,
-                size: 20,
-              ),
-            ),
+          ),
+
+          const SizedBox(width: 12),
+
+          // ================= PHOTO UPLOAD =================
+          _buildIconAction(
+            icon: Icons.camera_alt_rounded,
+            onTap: _showPhotoUpload,
           ),
         ],
+      ),
+    );
+  }
+
+  void _showPhotoUpload() {
+    _toast('Photo upload coming soon - will integrate with camera/gallery');
+  }
+
+  Widget _buildIconAction({
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+      child: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: AppTheme.glassLight,
+          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+          border: Border.all(color: AppTheme.border),
+        ),
+        child: Icon(icon, color: AppTheme.primary, size: 20),
       ),
     );
   }

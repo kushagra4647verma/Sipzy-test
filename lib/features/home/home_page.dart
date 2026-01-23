@@ -7,6 +7,8 @@ import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../shared/navigation/bottom_nav.dart';
+import '../../shared/ui/share_modal.dart';
+
 import '../../core/theme/app_theme.dart';
 import '../../services/api_service.dart';
 import '../expert/expert_page.dart';
@@ -735,8 +737,53 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Updated _buildHeader() method for HomePage
-// Replace the existing _buildHeader() method in lib/features/home/home_page.dart
+  void _showCitySelector() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return ListView(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          children: cities.map((city) {
+            final isSelected = city == selectedCity;
+
+            return ListTile(
+              title: Text(
+                city,
+                style: TextStyle(
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  color: isSelected ? AppTheme.primary : AppTheme.textPrimary,
+                ),
+              ),
+              trailing: isSelected
+                  ? const Icon(Icons.check, color: AppTheme.primary)
+                  : null,
+              onTap: () {
+                setState(() {
+                  selectedCity = city;
+                });
+
+                Navigator.pop(context);
+
+                // Optional: refresh data based on city
+                fetchRestaurants();
+              },
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
+  final cities = [
+    'Mumbai',
+    'Delhi',
+    'Bangalore',
+    'Hyderabad',
+  ];
+  String selectedCity = 'Bangalore';
 
   Widget _buildHeader() {
     final hasActiveFilters =
@@ -751,88 +798,32 @@ class _HomePageState extends State<HomePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Top Row: Location selector and Expert Corner
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              // Location Selector
-              Row(
-                children: [
-                  const Icon(
-                    Icons.location_on,
-                    color: AppTheme.primary,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Bangalore',
-                        style:
-                            Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(width: 4),
-                  const Icon(
-                    Icons.keyboard_arrow_down,
-                    color: AppTheme.textSecondary,
-                    size: 20,
-                  ),
-                ],
-              ),
-
-              // Expert Corner Button
-              InkWell(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => ExpertCornerPage(user: widget.user),
-                    ),
-                  );
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [AppTheme.secondary, AppTheme.secondaryLight],
-                    ),
-                    borderRadius: BorderRadius.circular(AppTheme.radiusFull),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppTheme.secondary.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.verified,
-                        color: Colors.white,
-                        size: 16,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Expert Corner',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                            ),
-                      ),
-                    ],
-                  ),
+          // Location Selector
+          InkWell(
+            onTap: _showCitySelector,
+            borderRadius: BorderRadius.circular(8),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.location_on,
+                  color: AppTheme.primary,
+                  size: 20,
                 ),
-              ),
-            ],
+                const SizedBox(width: 8),
+                Text(
+                  selectedCity,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                const SizedBox(width: 4),
+                const Icon(
+                  Icons.keyboard_arrow_down,
+                  color: AppTheme.textSecondary,
+                  size: 20,
+                ),
+              ],
+            ),
           ),
 
           const SizedBox(height: 16),
@@ -1078,7 +1069,9 @@ class _HomePageState extends State<HomePage> {
         restaurant['image'];
     final name = restaurant['name'] ?? 'Restaurant';
     final area = restaurant['area'] ?? '';
-    final distance = restaurant['distance'] ?? 0;
+    final distance = (restaurant['distance'] ?? 0).toDouble();
+    final cuisines = (restaurant['cuisine'] as List?)?.take(2).toList() ?? [];
+    final topDrink = restaurant['top_drink'] ?? '';
 
     return GestureDetector(
       onTap: () => context.push('/restaurant/$restaurantId'),
@@ -1091,6 +1084,7 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ================= IMAGE + ACTIONS =================
             Stack(
               children: [
                 ClipRRect(
@@ -1103,12 +1097,13 @@ class _HomePageState extends State<HomePage> {
                           height: 180,
                           width: double.infinity,
                           fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return _buildPlaceholderImage();
-                          },
+                          errorBuilder: (_, __, ___) =>
+                              _buildPlaceholderImage(),
                         )
                       : _buildPlaceholderImage(),
                 ),
+
+                // Gradient overlay
                 Container(
                   height: 180,
                   decoration: const BoxDecoration(
@@ -1122,14 +1117,18 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                 ),
-                // Bookmark & Share
+
+                // ===== Bookmark & Share (STOP tap propagation) =====
                 Positioned(
                   top: 12,
                   right: 12,
                   child: Row(
                     children: [
                       GestureDetector(
-                        onTap: () => toggleBookmark(restaurantId.toString()),
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          toggleBookmark(restaurantId.toString());
+                        },
                         child: Container(
                           width: 32,
                           height: 32,
@@ -1147,23 +1146,42 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Container(
-                        width: 32,
-                        height: 32,
-                        decoration: const BoxDecoration(
-                          color: Colors.black54,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.share_rounded,
-                          color: Colors.white,
-                          size: 18,
+                      GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          showDialog(
+                            context: context,
+                            builder: (context) => ShareModal(
+                              open: true,
+                              onClose: () => Navigator.pop(context),
+                              item: {
+                                'title': name,
+                                'description': 'Check out this restaurant!',
+                                'url':
+                                    'https://sipzy.co.in/restaurant/$restaurantId',
+                              },
+                            ),
+                          );
+                        },
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: const BoxDecoration(
+                            color: Colors.black54,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.share_rounded,
+                            color: Colors.white,
+                            size: 18,
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
-                // Info at bottom
+
+                // ===== Name + Location =====
                 Positioned(
                   bottom: 12,
                   left: 12,
@@ -1190,22 +1208,15 @@ class _HomePageState extends State<HomePage> {
                             color: Colors.white70,
                           ),
                           const SizedBox(width: 4),
-                          Text(
-                            area,
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                            ),
-                          ),
-                          const Text(
-                            ' • ',
-                            style: TextStyle(color: Colors.white70),
-                          ),
-                          Text(
-                            '${distance.toStringAsFixed(1)} km',
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
+                          Expanded(
+                            child: Text(
+                              '$area • ${distance.toStringAsFixed(1)} km',
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
@@ -1215,43 +1226,108 @@ class _HomePageState extends State<HomePage> {
                 ),
               ],
             ),
+
+            // ================= DETAILS =================
             Padding(
               padding: const EdgeInsets.all(12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppTheme.primary.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(8),
+                  // ===== Cuisines =====
+                  if (cuisines.isNotEmpty)
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: cuisines
+                          .map(
+                            (c) => Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primary.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                c.toString(),
+                                style: const TextStyle(
+                                  color: AppTheme.primary,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          )
+                          .toList(),
                     ),
-                    child: Row(
+
+                  // ===== Top Drink =====
+                  if (topDrink.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Row(
                       children: [
                         const Icon(
-                          Icons.star_rounded,
-                          color: AppTheme.primary,
-                          size: 16,
+                          Icons.local_bar,
+                          color: AppTheme.secondary,
+                          size: 14,
                         ),
                         const SizedBox(width: 4),
-                        Text(
-                          '${restaurant['sipzy_rating'] ?? 0}',
-                          style: const TextStyle(
-                            color: AppTheme.primary,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
+                        Expanded(
+                          child: Text(
+                            topDrink,
+                            style: const TextStyle(
+                              color: AppTheme.textSecondary,
+                              fontSize: 11,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  Text(
-                    '₹${restaurant['cost_for_two'] ?? 0} for 2',
-                    style: const TextStyle(
-                      color: AppTheme.textSecondary,
-                      fontSize: 12,
-                    ),
+                  ],
+
+                  const SizedBox(height: 10),
+
+                  // ===== Rating & Cost =====
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primary.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.star_rounded,
+                              color: AppTheme.primary,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${restaurant['sipzy_rating'] ?? 0}',
+                              style: const TextStyle(
+                                color: AppTheme.primary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Text(
+                        '₹${restaurant['cost_for_two'] ?? 0} for 2',
+                        style: const TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

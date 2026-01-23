@@ -731,7 +731,7 @@ class _SocialPageState extends State<SocialPage>
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () => _toast('Edit profile coming soon'),
+                  onPressed: () => _showEditProfileDialog(),
                   icon:
                       const Icon(Icons.edit, size: 18, color: AppTheme.primary),
                   label: const Text('Edit Profile',
@@ -769,26 +769,89 @@ class _SocialPageState extends State<SocialPage>
     );
   }
 
+  void _showEditProfileDialog() {
+    final nameCtrl = TextEditingController(text: widget.user['name']);
+    final emailCtrl = TextEditingController(text: widget.user['email']);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.card,
+        title: Text('Edit Profile', style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              decoration: InputDecoration(labelText: 'Name'),
+              style: TextStyle(color: Colors.white),
+            ),
+            SizedBox(height: 16),
+            TextField(
+              controller: emailCtrl,
+              decoration: InputDecoration(labelText: 'Email'),
+              style: TextStyle(color: Colors.white),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              updateProfile({
+                'name': nameCtrl.text,
+                'email': emailCtrl.text,
+              });
+              Navigator.pop(context);
+            },
+            child: Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildStatItem(String label, int value) {
+    IconData icon;
+    Color color;
+
+    switch (label) {
+      case 'Ratings':
+        icon = Icons.star;
+        color = AppTheme.primary;
+        break;
+      case 'Friends':
+        icon = Icons.people;
+        color = AppTheme.secondary;
+        break;
+      case 'Badges':
+        icon = Icons.emoji_events;
+        color = Colors.green;
+        break;
+      default:
+        icon = Icons.circle;
+        color = AppTheme.textSecondary;
+    }
+
     return Column(
       children: [
-        Text(
-          '$value',
-          style: const TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.textPrimary,
+        Container(
+          padding: EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.2),
+            shape: BoxShape.circle,
           ),
+          child: Icon(icon, color: color, size: 20),
         ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 13,
-            color: AppTheme.textSecondary,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
+        SizedBox(height: 8),
+        Text('$value',
+            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+        SizedBox(height: 4),
+        Text(label,
+            style: TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
       ],
     );
   }
@@ -1537,7 +1600,118 @@ class _SocialPageState extends State<SocialPage>
     );
   }
 
+  final Map<String, List<Map<String, dynamic>>> tierBadges = {
+    'Newbie': [
+      {
+        'name': 'Sip Rookie',
+        'icon': '🥤',
+        'target': 5,
+        'type': 'ratings',
+        'description': 'Rate your first 5 drinks'
+      },
+      {
+        'name': 'Introvert',
+        'icon': '👋',
+        'target': 5,
+        'type': 'friends',
+        'description': 'Add 5 friends'
+      },
+      {
+        'name': 'Hopper',
+        'icon': '🗺️',
+        'target': 5,
+        'type': 'bookmarks',
+        'description': 'Bookmark 5 places'
+      },
+    ],
+    'SipZeR': [
+      {
+        'name': 'Alchemist',
+        'icon': '🧪',
+        'target': 50,
+        'type': 'ratings',
+        'description': 'Rate 50 drinks'
+      },
+      {
+        'name': 'Social Butterfly',
+        'icon': '🦋',
+        'target': 50,
+        'type': 'friends',
+        'description': 'Build a network of 50 friends'
+      },
+      {
+        'name': 'SipZy Crawler',
+        'icon': '🕷️',
+        'target': 50,
+        'type': 'bookmarks',
+        'description': 'Bookmark 50 venues'
+      },
+    ],
+    'Alpha Z': [
+      {
+        'name': 'Connoisseur',
+        'icon': '👑',
+        'target': 100,
+        'type': 'ratings',
+        'description': 'Rate 100 drinks like a pro'
+      },
+      {
+        'name': 'Tribe Star',
+        'icon': '⭐',
+        'target': 100,
+        'type': 'friends',
+        'description': 'Create a tribe of 100 friends'
+      },
+      {
+        'name': 'SipZy NoMad',
+        'icon': '🌍',
+        'target': 100,
+        'type': 'bookmarks',
+        'description': 'Bookmark 100 places across cities'
+      },
+    ],
+  };
+
+  int getProgress(String type) {
+    switch (type) {
+      case 'ratings':
+        return stats['ratingsCount'] ?? 0;
+      case 'friends':
+        return stats['friendsCount'] ?? 0;
+      case 'bookmarks':
+        return bookmarks.length;
+      default:
+        return 0;
+    }
+  }
+
+  List<Map<String, dynamic>> _generateBadges() {
+    final List<Map<String, dynamic>> allBadges = [];
+
+    tierBadges.forEach((tier, badges) {
+      for (final badge in badges) {
+        final progress = getProgress(badge['type']);
+        final target = badge['target'] as int;
+        final earned = progress >= target;
+
+        allBadges.add({
+          'tier': tier,
+          'name': badge['name'],
+          'icon': badge['icon'],
+          'description': badge['description'],
+          'type': badge['type'],
+          'target': target,
+          'progress': progress,
+          'earned': earned,
+        });
+      }
+    });
+
+    return allBadges;
+  }
+
   Widget _buildBadgesList() {
+    final badges = _generateBadges();
     List filteredBadges = badges;
 
     if (badgeFilter == 'earned') {
@@ -1556,16 +1730,6 @@ class _SocialPageState extends State<SocialPage>
       );
     }
 
-    // Group by tier
-    final Map<String, List> grouped = {};
-    for (final badge in filteredBadges) {
-      final tier = badge['tier'] as String;
-      if (!grouped.containsKey(tier)) {
-        grouped[tier] = [];
-      }
-      grouped[tier]!.add(badge);
-    }
-
     final tiers = ['Newbie', 'SipZeR', 'Alpha Z'];
     final tierColors = {
       'Newbie': Colors.green,
@@ -1573,31 +1737,31 @@ class _SocialPageState extends State<SocialPage>
       'Alpha Z': Colors.purple,
     };
 
-    return ListView.builder(
+    return ListView(
       padding: const EdgeInsets.all(16),
-      itemCount: tiers.length,
-      itemBuilder: (_, tierIndex) {
-        final tier = tiers[tierIndex];
-        final tierBadges = grouped[tier] ?? [];
+      children: tiers.map((tier) {
+        final tierBadges =
+            filteredBadges.where((b) => b['tier'] == tier).toList();
 
         if (tierBadges.isEmpty) return const SizedBox.shrink();
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (tierIndex > 0) const SizedBox(height: 16),
-            // Tier Header
+            // ===== Tier Header =====
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
                     tierColors[tier]!.withOpacity(0.2),
-                    Colors.transparent
+                    Colors.transparent,
                   ],
                 ),
                 borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                border: Border.all(color: tierColors[tier]!.withOpacity(0.3)),
+                border: Border.all(
+                  color: tierColors[tier]!.withOpacity(0.3),
+                ),
               ),
               child: Row(
                 children: [
@@ -1623,10 +1787,14 @@ class _SocialPageState extends State<SocialPage>
               ),
             ),
             const SizedBox(height: 12),
-            ...tierBadges.map((badge) => _buildBadgeCard(badge)),
+
+            // ===== Badge Cards =====
+            ...tierBadges.map((badge) => _buildBadgeCard(badge as Map)),
+
+            const SizedBox(height: 20),
           ],
         );
-      },
+      }).toList(),
     );
   }
 
@@ -1634,7 +1802,8 @@ class _SocialPageState extends State<SocialPage>
     final earned = badge['earned'] == true;
     final progress = badge['progress'] as int;
     final target = badge['target'] as int;
-    final percentage = (progress / target * 100).clamp(0, 100);
+    final percentage =
+        target == 0 ? 0.0 : (progress / target * 100).clamp(0, 100);
 
     return GestureDetector(
       onTap: () => _showBadgeInfo(badge),
@@ -2066,9 +2235,9 @@ class _SocialPageState extends State<SocialPage>
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () => _toast('Search friends coming soon'),
-                  icon: const Icon(Icons.search, size: 18),
-                  label: const Text('Search Friends'),
+                  onPressed: () => _showFriendSearch(),
+                  icon: Icon(Icons.search, size: 18),
+                  label: Text('Search Friends'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.secondary,
                     padding: const EdgeInsets.symmetric(vertical: 12),
@@ -2097,6 +2266,72 @@ class _SocialPageState extends State<SocialPage>
                 ),
         ),
       ],
+    );
+  }
+
+  void _showFriendSearch() async {
+    final query = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        String searchText = '';
+        return AlertDialog(
+          title: Text('Search Friends'),
+          content: TextField(
+            onChanged: (v) => searchText = v,
+            decoration: InputDecoration(hintText: 'Enter name or phone'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, searchText),
+              child: Text('Search'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (query != null && query.isNotEmpty) {
+      try {
+        final headers = await _getHeaders();
+        final response = await http.get(
+          Uri.parse('${EnvConfig.apiBaseUrl}/friends/search?query=$query'),
+          headers: headers,
+        );
+
+        if (response.statusCode == 200) {
+          final results = jsonDecode(response.body);
+          _showSearchResults(results);
+        }
+      } catch (e) {
+        _toast('Search failed', isError: true);
+      }
+    }
+  }
+
+  void _showSearchResults(List results) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        child: ListView.builder(
+          itemCount: results.length,
+          itemBuilder: (_, i) {
+            final person = results[i];
+            return ListTile(
+              leading: CircleAvatar(child: Text(person['name'][0])),
+              title: Text(person['name']),
+              subtitle: Text(person['phone']),
+              trailing: IconButton(
+                icon: Icon(Icons.person_add),
+                onPressed: () => addFriendByPhone(person['phone']),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 
