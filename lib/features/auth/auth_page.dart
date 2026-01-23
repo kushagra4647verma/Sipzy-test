@@ -965,62 +965,104 @@ class _AuthPageState extends State<AuthPage> {
             Icon(Icons.gavel, color: Color(0xFFF5B642), size: 18),
             SizedBox(width: 8),
             Text(
-              'Legal Consents (Required)',
+              'LEGAL CONSENTS (REQUIRED)',
               style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w600,
-                fontSize: 16,
+                fontSize: 14,
+                letterSpacing: 0.5,
               ),
             ),
           ],
         ),
         const SizedBox(height: 16),
 
-        // Terms & Conditions
-        _buildConsentCheckbox(
-          value: agreedToTerms,
-          onChanged: (v) => setState(() => agreedToTerms = v ?? false),
-          text: 'I agree to the ',
-          linkText: 'Terms & Conditions',
-          onLinkTap: () {
-            // TODO: Open T&C
-          },
-        ),
-
-        const SizedBox(height: 12),
-
-        // Privacy Policy
-        _buildConsentCheckbox(
-          value: agreedToPrivacy,
-          onChanged: (v) => setState(() => agreedToPrivacy = v ?? false),
-          text: 'I agree to the ',
-          linkText: 'Privacy Policy',
-          onLinkTap: () {
-            // TODO: Open Privacy Policy
-          },
-        ),
-
-        const SizedBox(height: 12),
-
-        // Alcohol Consent
-        _buildConsentCheckbox(
-          value: confirmedAlcoholConsent,
-          onChanged: (v) =>
-              setState(() => confirmedAlcoholConsent = v ?? false),
-          text:
-              'I confirm that I am legally permitted to view alcohol-related content in my location',
-          isLongText: true,
+        // Combined Legal Consent
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF3A3A3A),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: Checkbox(
+                  value: agreedToTerms &&
+                      agreedToPrivacy &&
+                      confirmedAlcoholConsent,
+                  onChanged: (v) => setState(() {
+                    agreedToTerms = v ?? false;
+                    agreedToPrivacy = v ?? false;
+                    confirmedAlcoholConsent = v ?? false;
+                  }),
+                  activeColor: const Color(0xFFF5B642),
+                  checkColor: Colors.black,
+                  side: const BorderSide(color: Colors.white38),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: RichText(
+                  text: TextSpan(
+                    style: const TextStyle(
+                        color: Colors.white, fontSize: 14, height: 1.4),
+                    children: [
+                      const TextSpan(text: 'I agree to the '),
+                      WidgetSpan(
+                        child: GestureDetector(
+                          onTap: () {
+                            // TODO: Open T&C
+                          },
+                          child: const Text(
+                            'Terms & Conditions',
+                            style: TextStyle(
+                              color: Color(0xFFF5B642),
+                              decoration: TextDecoration.underline,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const TextSpan(text: ', '),
+                      WidgetSpan(
+                        child: GestureDetector(
+                          onTap: () {
+                            // TODO: Open Privacy Policy
+                          },
+                          child: const Text(
+                            'Privacy Policy',
+                            style: TextStyle(
+                              color: Color(0xFFF5B642),
+                              decoration: TextDecoration.underline,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const TextSpan(
+                          text:
+                              ' and confirm I am legally permitted to view alcohol-related content.'),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
 
         const SizedBox(height: 20),
 
-        // Optional Preferences Section
+        // Notifications Section
         Row(
           children: const [
-            Icon(Icons.tune, color: Color(0xFFF5B642), size: 18),
+            Icon(Icons.notifications, color: Color(0xFFF5B642), size: 18),
             SizedBox(width: 8),
             Text(
-              'Optional Preferences',
+              'Notifications (Optional)',
               style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w600,
@@ -1031,27 +1073,96 @@ class _AuthPageState extends State<AuthPage> {
         ),
         const SizedBox(height: 16),
 
-        // Receive Notifications
-        _buildPreferenceCheckbox(
-          value: enableNotifications,
-          onChanged: (v) => setState(() => enableNotifications = v ?? false),
-          title: 'Receive notifications',
-          subtitle: 'Events, games & updates',
+        // Enable Notifications
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF3A3A3A),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.notifications_active,
+                  color: Colors.white70, size: 20),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Push Notifications',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Get updates about new releases & events',
+                      style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: enableNotifications,
+                onChanged: (v) => setState(() => enableNotifications = v),
+                activeColor: const Color(0xFFF5B642),
+              ),
+            ],
+          ),
         ),
 
         const SizedBox(height: 12),
 
         // Enable Social Features
-        _buildPreferenceCheckbox(
-          value: enableSocialFeatures,
-          onChanged: (v) => setState(() => enableSocialFeatures = v ?? false),
-          title: 'Enable social features',
-          subtitle: 'Friends, invites, sharing',
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF3A3A3A),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.people, color: Colors.white70, size: 20),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Social Features',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Connect with friends & share reviews',
+                      style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: enableSocialFeatures,
+                onChanged: (v) => setState(() => enableSocialFeatures = v),
+                activeColor: const Color(0xFFF5B642),
+              ),
+            ],
+          ),
         ),
 
         const SizedBox(height: 24),
 
-        // Continue Button
+        // Create Account Button
         SizedBox(
           width: double.infinity,
           height: 52,
@@ -1063,46 +1174,16 @@ class _AuthPageState extends State<AuthPage> {
                 borderRadius: BorderRadius.circular(26),
               ),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  loading ? 'Creating Account…' : 'Continue to SipZy',
-                  style: const TextStyle(
-                    color: Colors.black,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-                if (!loading) ...[
-                  const SizedBox(width: 8),
-                  const Icon(Icons.arrow_forward,
-                      color: Colors.black, size: 20),
-                ],
-              ],
+            child: Text(
+              loading ? 'Creating Account…' : 'Create Account',
+              style: const TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
             ),
           ),
         ),
-      ],
-    );
-  }
-
-  Widget _buildLabel(String text, {bool required = false}) {
-    return Row(
-      children: [
-        Text(
-          text,
-          style: const TextStyle(
-            color: Colors.white70,
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        if (required)
-          const Text(
-            ' *',
-            style: TextStyle(color: Colors.red, fontSize: 14),
-          ),
       ],
     );
   }
@@ -1114,125 +1195,30 @@ class _AuthPageState extends State<AuthPage> {
       filled: true,
       fillColor: const Color(0xFF3A3A3A),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         borderSide: BorderSide.none,
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      helperStyle: const TextStyle(color: Colors.white54, fontSize: 12),
     );
   }
 
-  Widget _buildConsentCheckbox({
-    required bool value,
-    required Function(bool?) onChanged,
-    required String text,
-    String? linkText,
-    VoidCallback? onLinkTap,
-    bool isLongText = false,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF3A3A3A),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 24,
-            height: 24,
-            child: Checkbox(
-              value: value,
-              onChanged: onChanged,
-              activeColor: const Color(0xFFF5B642),
-              checkColor: Colors.black,
-              side: const BorderSide(color: Colors.white38),
-            ),
+  Widget _buildLabel(String label, {bool required = false}) {
+    return Row(
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w500,
+            fontSize: 14,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: linkText != null
-                ? RichText(
-                    text: TextSpan(
-                      style: const TextStyle(color: Colors.white, fontSize: 14),
-                      children: [
-                        TextSpan(text: text),
-                        WidgetSpan(
-                          child: GestureDetector(
-                            onTap: onLinkTap,
-                            child: Text(
-                              linkText,
-                              style: const TextStyle(
-                                color: Color(0xFFF5B642),
-                                decoration: TextDecoration.underline,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : Text(
-                    text,
-                    style: const TextStyle(color: Colors.white, fontSize: 14),
-                  ),
+        ),
+        if (required)
+          const Text(
+            ' *',
+            style: TextStyle(color: Colors.red, fontSize: 14),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPreferenceCheckbox({
-    required bool value,
-    required Function(bool?) onChanged,
-    required String title,
-    required String subtitle,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF3A3A3A),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 24,
-            height: 24,
-            child: Checkbox(
-              value: value,
-              onChanged: onChanged,
-              activeColor: const Color(0xFFF5B642),
-              checkColor: Colors.black,
-              side: const BorderSide(color: Colors.white38),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    color: Colors.white54,
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 }
