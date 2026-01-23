@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../shared/ui/share_modal.dart';
 import '../../core/theme/app_theme.dart';
 import '../../config/env_config.dart';
+import '../../services/beverage_service.dart';
 
 class BeverageDetailPage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -23,6 +24,7 @@ class BeverageDetailPage extends StatefulWidget {
 
 class _BeverageDetailPageState extends State<BeverageDetailPage> {
   final _supabase = Supabase.instance.client;
+  final _beverageService = BeverageService();
 
   Map<String, dynamic>? beverage;
   bool loading = true;
@@ -62,80 +64,33 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
   }
 
   Future<void> fetchBeverage() async {
-    // setState(() {
-    //   loading = true;
-    //   hasError = false;
-    // });
-
-    // try {
-    //   final headers = await _getHeaders();
-    //   final uri =
-    //       Uri.parse('${EnvConfig.apiBaseUrl}/beverages/${widget.beverageId}');
-
-    //   print('📡 Fetching beverage from: $uri');
-
-    //   final response = await http.get(uri, headers: headers).timeout(
-    //         const Duration(seconds: 15),
-    //       );
-
-    //   print('📡 Response status: ${response.statusCode}');
-    //   print('📡 Response body: ${response.body}');
-
-    //   if (response.statusCode == 200) {
-    //     final data = jsonDecode(response.body);
-
-    //     if (mounted) {
-    //       setState(() {
-    //         // Handle both response formats
-    //         if (data is Map &&
-    //             data.containsKey('success') &&
-    //             data['success'] == true) {
-    //           beverage = data['data'] as Map<String, dynamic>?;
-    //         } else if (data is Map) {
-    //           beverage = data.cast<String, dynamic>();
-    //         }
-
-    //         hasError = false;
-    //       });
-    //     }
-    //   } else if (response.statusCode == 401) {
-    //     if (mounted) {
-    //       _toast('Session expired. Please login again.', isError: true);
-    //       context.go('/auth');
-    //     }
-    //   } else {
-    //     throw Exception('Failed to load beverage: ${response.statusCode}');
-    //   }
-    // } catch (e) {
-    //   print('❌ Fetch beverage error: $e');
-    //   if (mounted) {
-    //     setState(() => hasError = true);
-    //     _toast('Failed to load beverage details', isError: true);
-    //   }
-    // } finally {
-    //   if (mounted) {
-    //     setState(() => loading = false);
-    //   }
-    // }
-
     setState(() {
-      beverage = {
-        'id': widget.beverageId,
-        'name': 'Old Fashioned',
-        'photo': '',
-        'category': 'Whisky Cocktail',
-        'drinkType': 'Cocktail',
-        'price': 450,
-        'description': 'Classic bourbon cocktail',
-        'baseType': 'Whisky',
-        'ratings': {
-          'avgHuman': 4.2,
-          'counthuman': 45,
-          'avgexpert': 4.5,
-        }
-      };
-      loading = false;
+      loading = true;
+      hasError = false;
     });
+
+    try {
+      final result = await _beverageService.getBeverage(widget.beverageId);
+
+      if (mounted && result != null) {
+        setState(() {
+          beverage = result;
+          hasError = false;
+        });
+      } else {
+        throw Exception('Beverage not found');
+      }
+    } catch (e) {
+      print('❌ Fetch beverage error: $e');
+      if (mounted) {
+        setState(() => hasError = true);
+        _toast('Failed to load beverage details', isError: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => loading = false);
+      }
+    }
   }
 
   Future<void> submitRating() async {
@@ -147,27 +102,25 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
     setState(() => submitting = true);
 
     try {
-      final headers = await _getHeaders();
-
-      await http.post(
-        Uri.parse(
-            '${EnvConfig.apiBaseUrl}/beverages/${widget.beverageId}/rate'),
-        headers: headers,
-        body: jsonEncode({
-          'user_id': widget.user['id'],
+      final success = await _beverageService.rateBeverage(
+        widget.beverageId,
+        {
           'rating': rating,
           'review': review,
-        }),
+        },
       );
 
-      _toast('Rating submitted!');
-      setState(() {
-        rating = 0;
-        review = '';
-        showRatingDialog = false;
-      });
-
-      fetchBeverage();
+      if (success) {
+        _toast('Rating submitted!');
+        setState(() {
+          rating = 0;
+          review = '';
+          showRatingDialog = false;
+        });
+        fetchBeverage();
+      } else {
+        _toast('Failed to submit rating', isError: true);
+      }
     } catch (e) {
       print('❌ Submit rating error: $e');
       _toast('Failed to submit rating', isError: true);

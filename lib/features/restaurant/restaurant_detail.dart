@@ -4,7 +4,10 @@ import 'package:http/http.dart' as http;
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
+import '../../services/restaurant_service.dart';
+import '../../services/beverage_service.dart';
+import '../../services/event_service.dart';
+import '../../services/user_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../config/env_config.dart';
 import '../../shared/ui/invite_friends_modal.dart';
@@ -28,6 +31,10 @@ class RestaurantDetail extends StatefulWidget {
 class _RestaurantDetailState extends State<RestaurantDetail>
     with SingleTickerProviderStateMixin {
   final _supabase = Supabase.instance.client;
+  final _restaurantService = RestaurantService();
+  final _beverageService = BeverageService();
+  final _eventService = EventService();
+  final _userService = UserService();
 
   Map<String, dynamic>? restaurant;
   List beverages = [];
@@ -69,165 +76,46 @@ class _RestaurantDetailState extends State<RestaurantDetail>
     super.dispose();
   }
 
-  Future<Map<String, String>> _getHeaders() async {
-    final session = _supabase.auth.currentSession;
-    final user = _supabase.auth.currentUser;
-
-    final headers = {'Content-Type': 'application/json'};
-
-    if (session?.accessToken != null) {
-      headers['Authorization'] = 'Bearer ${session!.accessToken}';
-    }
-
-    if (user?.id != null) {
-      headers['x-user-id'] = user!.id;
-    } else if (widget.user['id'] != null) {
-      headers['x-user-id'] = widget.user['id'].toString();
-    }
-
-    return headers;
-  }
-
   Future<void> fetchRestaurant() async {
-    // setState(() {
-    //   loading = true;
-    //   hasError = false;
-    // });
-
-    // try {
-    //   final headers = await _getHeaders();
-
-    //   // Fetch restaurant details
-    //   final restaurantRes = await http
-    //       .get(
-    //         Uri.parse(
-    //             '${EnvConfig.apiBaseUrl}/restaurants/${widget.restaurantId}'),
-    //         headers: headers,
-    //       )
-    //       .timeout(const Duration(seconds: 15));
-
-    //   if (restaurantRes.statusCode == 200) {
-    //     final data = jsonDecode(restaurantRes.body);
-    //     if (mounted) {
-    //       setState(() {
-    //         restaurant = data is Map &&
-    //                 data.containsKey('success') &&
-    //                 data['success'] == true
-    //             ? data['data']
-    //             : data;
-    //       });
-    //     }
-    //   }
-
-    //   // Fetch beverages
-    //   final beveragesRes = await http
-    //       .get(
-    //         Uri.parse(
-    //             '${EnvConfig.apiBaseUrl}/restaurants/${widget.restaurantId}/beverages'),
-    //         headers: headers,
-    //       )
-    //       .timeout(const Duration(seconds: 15));
-
-    //   if (beveragesRes.statusCode == 200) {
-    //     final data = jsonDecode(beveragesRes.body);
-    //     if (mounted) {
-    //       setState(() {
-    //         beverages = data is Map &&
-    //                 data.containsKey('success') &&
-    //                 data['success'] == true
-    //             ? (data['data'] as List? ?? [])
-    //             : (data is List ? data : []);
-
-    //         // Sort beverages for different sections
-    //         _categorizeBeverages();
-    //       });
-    //       filterAndSort();
-    //     }
-    //   }
-
-    //   // Fetch events for this restaurant
-    //   await _fetchRestaurantEvents();
-
-    //   // Fetch expert recommendations
-    //   await _fetchExpertRecommendations();
-    // } catch (e) {
-    //   print('❌ Fetch restaurant error: $e');
-    //   if (mounted) {
-    //     setState(() => hasError = true);
-    //     _toast('Failed to load restaurant', isError: true);
-    //   }
-    // } finally {
-    //   if (mounted) {
-    //     setState(() => loading = false);
-    //   }
-    // }
-
-    // DUMMY DATA
-
     setState(() {
-      restaurant = {
-        'id': widget.restaurantId,
-        'name': 'The Bar Stock Exchange',
-        'image': '',
-        'area': 'Indiranagar',
-        'distance': 2.5,
-        'sipzy_rating': 4.5,
-        'cost_for_two': 2000,
-        'cuisine': ['Continental', 'Asian'],
-        'phone': '+918012345678',
-        'amenities': ['WiFi', 'Parking', 'Live Music'],
-        'photos': [],
-      };
-
-      beverages = [
-        {
-          'id': 1,
-          'name': 'Old Fashioned',
-          'price': 450,
-          'photo': '',
-          'category': 'alcoholic',
-          'sipzy_rating': 4.5,
-          'ratings': {'avgHuman': 4.2}
-        },
-        {
-          'id': 2,
-          'name': 'Mojito',
-          'price': 350,
-          'photo': '',
-          'category': 'alcoholic',
-          'sipzy_rating': 4.3,
-          'ratings': {'avgHuman': 4.0}
-        },
-        {
-          'id': 3,
-          'name': 'Espresso',
-          'price': 150,
-          'photo': '',
-          'category': 'non-alcoholic',
-          'sipzy_rating': 4.0,
-          'ratings': {'avgHuman': 3.8}
-        },
-      ];
-
-      _categorizeBeverages();
-
-      filterAndSort();
-
-      events = [
-        {
-          'id': 1,
-          'name': 'Live Jazz Night',
-          'description': 'Enjoy smooth jazz every Friday',
-          'eventdate': '2026-01-24'
-        }
-      ];
-
-      expertRecommendations = [
-        {'id': 1, 'name': 'Rajesh Kumar', 'avatar': '', 'avg_score_given': 4.5}
-      ];
-
-      loading = false;
+      loading = true;
+      hasError = false;
     });
+
+    try {
+      // Fetch all data in parallel
+      final results = await Future.wait([
+        _restaurantService.getRestaurant(widget.restaurantId),
+        _restaurantService.getRestaurantBeverages(widget.restaurantId),
+        _eventService.getEvents(restaurantId: widget.restaurantId),
+        _restaurantService.getExpertRecommendations(widget.restaurantId),
+      ]);
+
+      if (mounted) {
+        setState(() {
+          restaurant = results[0] as Map<String, dynamic>?;
+          beverages = results[1] as List;
+          events = results[2] as List;
+          expertRecommendations = results[3] as List;
+
+          // Categorize beverages
+          _categorizeBeverages();
+          filterAndSort();
+
+          hasError = false;
+        });
+      }
+    } catch (e) {
+      print('❌ Fetch restaurant error: $e');
+      if (mounted) {
+        setState(() => hasError = true);
+        _toast('Failed to load restaurant', isError: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => loading = false);
+      }
+    }
   }
 
   void _categorizeBeverages() {
@@ -248,77 +136,16 @@ class _RestaurantDetailState extends State<RestaurantDetail>
     customerFavorites = sorted.take(5).toList();
   }
 
-  Future<void> _fetchRestaurantEvents() async {
-    try {
-      final headers = await _getHeaders();
-      final response = await http.get(
-        Uri.parse(
-            '${EnvConfig.apiBaseUrl}/events?restaurant_id=${widget.restaurantId}'),
-        headers: headers,
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (mounted) {
-          setState(() {
-            events = data is Map && data['success'] == true
-                ? (data['data'] as List? ?? [])
-                : (data is List ? data : []);
-          });
-        }
-      }
-    } catch (e) {
-      print('⚠️ Failed to fetch events: $e');
-    }
-  }
-
-  Future<void> _fetchExpertRecommendations() async {
-    try {
-      final headers = await _getHeaders();
-      final response = await http.get(
-        Uri.parse(
-            '${EnvConfig.apiBaseUrl}/restaurants/${widget.restaurantId}/expert-recommendations'),
-        headers: headers,
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (mounted) {
-          setState(() {
-            expertRecommendations = data is Map && data['success'] == true
-                ? (data['data'] as List? ?? [])
-                : (data is List ? data : []);
-          });
-        }
-      }
-    } catch (e) {
-      print('⚠️ Failed to fetch expert recommendations: $e');
-    }
-  }
-
   Future<void> checkBookmark() async {
     try {
-      final headers = await _getHeaders();
-      final userId = _supabase.auth.currentUser?.id ?? widget.user['id'];
+      final bookmarks = await _userService.getBookmarks();
 
-      final response = await http.get(
-        Uri.parse('${EnvConfig.apiBaseUrl}/users/$userId/bookmarks'),
-        headers: headers,
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final bookmarks = data is Map && data.containsKey('data')
-            ? (data['data'] as List? ?? [])
-            : (data is List ? data : []);
-
-        if (mounted) {
-          setState(() {
-            isBookmarked = bookmarks.any((b) =>
-                b['restaurantid']?.toString() == widget.restaurantId ||
-                b['id']?.toString() == widget.restaurantId);
-          });
-        }
+      if (mounted) {
+        setState(() {
+          isBookmarked = bookmarks.any((b) =>
+              b['restaurantid']?.toString() == widget.restaurantId ||
+              b['id']?.toString() == widget.restaurantId);
+        });
       }
     } catch (e) {
       print('⚠️ Failed to check bookmark: $e');
@@ -327,16 +154,9 @@ class _RestaurantDetailState extends State<RestaurantDetail>
 
   Future<void> toggleBookmark() async {
     try {
-      final headers = await _getHeaders();
-      final userId = _supabase.auth.currentUser?.id ?? widget.user['id'];
+      final success = await _userService.toggleBookmark(widget.restaurantId);
 
-      final response = await http.post(
-        Uri.parse(
-            '${EnvConfig.apiBaseUrl}/users/$userId/bookmarks/${widget.restaurantId}'),
-        headers: headers,
-      );
-
-      if (response.statusCode == 200) {
+      if (success) {
         setState(() => isBookmarked = !isBookmarked);
         _toast(isBookmarked ? 'Bookmarked!' : 'Bookmark removed');
         checkBookmark();

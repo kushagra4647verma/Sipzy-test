@@ -27,7 +27,7 @@ class RestaurantService {
 
   // ============ RESTAURANTS ============
 
-  /// GET /users/restaurants/restaurants
+  /// GET /users/restaurants
   Future<List> getRestaurants({
     String? city,
     double? lat,
@@ -53,8 +53,8 @@ class RestaurantService {
       if (maxDistance != null) params['max_distance'] = maxDistance.toString();
       if (sortBy != null) params['sort_by'] = sortBy;
 
-      final uri = Uri.parse('$baseUrl/restaurants/restaurants')
-          .replace(queryParameters: params);
+      final uri =
+          Uri.parse('$baseUrl/restaurants').replace(queryParameters: params);
 
       final response = await http
           .get(uri, headers: headers)
@@ -73,13 +73,13 @@ class RestaurantService {
     }
   }
 
-  /// GET /restaurants/restaurants/{restaurant_id}
+  /// GET /restaurants/{restaurant_id}
   Future<Map<String, dynamic>?> getRestaurant(String restaurantId) async {
     try {
       final headers = await _getHeaders();
       final response = await http
           .get(
-            Uri.parse('$baseUrl/restaurants/restaurants/$restaurantId'),
+            Uri.parse('$baseUrl/restaurants/$restaurantId'),
             headers: headers,
           )
           .timeout(EnvConfig.requestTimeout);

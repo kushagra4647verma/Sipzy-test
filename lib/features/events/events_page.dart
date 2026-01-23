@@ -6,6 +6,7 @@ import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:async';
+import '../../services/event_service.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../shared/navigation/bottom_nav.dart';
@@ -21,6 +22,7 @@ class EventsPage extends StatefulWidget {
 
 class _EventsPageState extends State<EventsPage> {
   final _supabase = Supabase.instance.client;
+  final _eventService = EventService();
 
   List events = [];
   bool loading = true;
@@ -53,103 +55,44 @@ class _EventsPageState extends State<EventsPage> {
   }
 
   Future<void> fetchEvents() async {
-    // setState(() {
-    //   loading = true;
-    //   hasError = false;
-    // });
-
-    // try {
-    //   final headers = await _getHeaders();
-    //   final uri = Uri.parse('${EnvConfig.apiBaseUrl}/events');
-
-    //   print('📡 Fetching events from: $uri');
-
-    //   final res = await http.get(uri, headers: headers).timeout(
-    //     const Duration(seconds: 15),
-    //     onTimeout: () {
-    //       throw TimeoutException('Request timed out');
-    //     },
-    //   );
-
-    //   print('📡 Response status: ${res.statusCode}');
-
-    //   if (res.statusCode == 200) {
-    //     final data = jsonDecode(res.body);
-
-    //     if (mounted) {
-    //       setState(() {
-    //         if (data is Map &&
-    //             data.containsKey('success') &&
-    //             data['success'] == true) {
-    //           events = (data['data'] as List? ?? []);
-    //         } else if (data is List) {
-    //           events = data;
-    //         } else {
-    //           events = (data['data'] as List? ?? []);
-    //         }
-
-    //         // Apply search filter if needed
-    //         if (searchQuery.isNotEmpty) {
-    //           events = events.where((e) {
-    //             final name = (e['name'] ?? '').toString().toLowerCase();
-    //             final description =
-    //                 (e['description'] ?? '').toString().toLowerCase();
-    //             final query = searchQuery.toLowerCase();
-
-    //             return name.contains(query) || description.contains(query);
-    //           }).toList();
-    //         }
-
-    //         hasError = false;
-    //       });
-    //     }
-    //   } else if (res.statusCode == 401) {
-    //     if (mounted) {
-    //       _toast('Session expired. Please login again.', isError: true);
-    //       context.go('/auth');
-    //     }
-    //   } else {
-    //     throw Exception('Failed to load events: ${res.statusCode}');
-    //   }
-    // } on TimeoutException {
-    //   print('❌ Request timeout');
-    //   if (mounted) {
-    //     setState(() => hasError = true);
-    //     _toast('Request timed out. Please try again.', isError: true);
-    //   }
-    // } catch (e) {
-    //   print('❌ Fetch events error: $e');
-    //   if (mounted) {
-    //     setState(() => hasError = true);
-    //     _toast('Failed to load events', isError: true);
-    //   }
-    // } finally {
-    //   if (mounted) {
-    //     setState(() => loading = false);
-    //   }
-    // }
-
     setState(() {
-      events = [
-        {
-          'id': 1,
-          'name': 'Wine Tasting Evening',
-          'description': 'Premium wine selection',
-          'photo': '',
-          'eventdate': '2026-01-25',
-          'eventtime': '19:00'
-        },
-        {
-          'id': 2,
-          'name': 'Craft Beer Festival',
-          'description': 'Local breweries showcase',
-          'photo': '',
-          'eventdate': '2026-01-28',
-          'eventtime': '18:00'
-        },
-      ];
-      loading = false;
+      loading = true;
+      hasError = false;
     });
+
+    try {
+      final fetchedEvents = await _eventService.getEvents();
+
+      if (mounted) {
+        setState(() {
+          events = fetchedEvents;
+
+          // Apply search filter if needed
+          if (searchQuery.isNotEmpty) {
+            events = events.where((e) {
+              final name = (e['name'] ?? '').toString().toLowerCase();
+              final description =
+                  (e['description'] ?? '').toString().toLowerCase();
+              final query = searchQuery.toLowerCase();
+
+              return name.contains(query) || description.contains(query);
+            }).toList();
+          }
+
+          hasError = false;
+        });
+      }
+    } catch (e) {
+      print('❌ Fetch events error: $e');
+      if (mounted) {
+        setState(() => hasError = true);
+        _toast('Failed to load events', isError: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => loading = false);
+      }
+    }
   }
 
   void bookNow(Map event) async {

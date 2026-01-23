@@ -5,7 +5,8 @@ import 'dart:convert';
 import 'package:go_router/go_router.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
+import '../../services/restaurant_service.dart';
+import '../../services/user_service.dart';
 import '../../shared/navigation/bottom_nav.dart';
 import '../../shared/ui/share_modal.dart';
 
@@ -23,6 +24,8 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final _supabase = Supabase.instance.client;
+  final _restaurantService = RestaurantService();
+  final _userService = UserService();
 
   List restaurants = [];
   List featuredRestaurants = [];
@@ -101,139 +104,64 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<Map<String, String>> _getHeaders() async {
-    final session = _supabase.auth.currentSession;
-    final user = _supabase.auth.currentUser;
-
-    final headers = {'Content-Type': 'application/json'};
-
-    if (session?.accessToken != null) {
-      headers['Authorization'] = 'Bearer ${session!.accessToken}';
-    }
-
-    if (user?.id != null) {
-      headers['x-user-id'] = user!.id;
-    }
-
-    return headers;
-  }
-
   Future<void> fetchRestaurants() async {
-    // try {
-    //   final headers = await _getHeaders();
-
-    //   // Build query params
-    //   final params = <String, String>{};
-    //   if (searchQuery.isNotEmpty) params['search'] = searchQuery;
-    //   if (selectedCuisines.isNotEmpty) {
-    //     params['cuisine'] = selectedCuisines.first;
-    //   }
-    //   if (minRating > 0) params['min_rating'] = minRating.toString();
-    //   if (maxDistance < 10) params['max_distance'] = maxDistance.toString();
-    //   params['sort_by'] = sortBy;
-
-    //   final uri = Uri.parse(ApiService.restaurantService)
-    //       .replace(queryParameters: params);
-
-    //   print('📡 Fetching restaurants from: $uri');
-
-    //   final response = await http.get(uri, headers: headers).timeout(
-    //         const Duration(seconds: 15),
-    //       );
-
-    //   print('📡 Response status: ${response.statusCode}');
-
-    //   if (response.statusCode == 200) {
-    //     final data = jsonDecode(response.body);
-    //     if (mounted) {
-    //       setState(() {
-    //         restaurants = data['success'] == true
-    //             ? (data['data'] as List? ?? [])
-    //             : (data is List ? data : []);
-    //         hasError = false;
-    //       });
-    //     }
-
-    //     // Fetch featured and trending only if no search
-    //     if (searchQuery.isEmpty && selectedCuisines.isEmpty && minRating == 0) {
-    //       await _fetchFeaturedAndTrending(headers);
-    //     } else {
-    //       if (mounted) {
-    //         setState(() {
-    //           featuredRestaurants = [];
-    //           trendingRestaurants = [];
-    //         });
-    //       }
-    //     }
-    //   } else if (response.statusCode == 401) {
-    //     print('❌ Authentication failed - session may have expired');
-    //     if (mounted) {
-    //       _toast('Session expired. Please login again.', isError: true);
-    //       context.go('/auth');
-    //     }
-    //   } else {
-    //     throw Exception('Failed to load restaurants: ${response.statusCode}');
-    //   }
-    // } catch (e) {
-    //   print('❌ Fetch restaurants error: $e');
-    //   if (mounted) {
-    //     setState(() => hasError = true);
-    //     _toast('Failed to load restaurants', isError: true);
-    //   }
-    // } finally {
-    //   if (mounted) {
-    //     setState(() => loading = false);
-    //   }
-    // }
-
     setState(() {
-      restaurants = [
-        {
-          'id': 1,
-          'name': 'The Bar Stock Exchange',
-          'area': 'Indiranagar',
-          'distance': 2.5,
-          'sipzy_rating': 4.5,
-          'cost_for_two': 2000,
-          'logoImage': '',
-          'cuisine': ['Continental', 'Asian']
-        },
-        {
-          'id': 2,
-          'name': 'Toit Brewpub',
-          'area': 'Koramangala',
-          'distance': 3.2,
-          'sipzy_rating': 4.3,
-          'cost_for_two': 1800,
-          'logoImage': '',
-          'cuisine': ['Italian', 'Continental']
-        },
-        {
-          'id': 3,
-          'name': 'The Pump House',
-          'area': 'Whitefield',
-          'distance': 8.5,
-          'sipzy_rating': 4.7,
-          'cost_for_two': 2500,
-          'logoImage': '',
-          'cuisine': ['Indian', 'Continental']
-        },
-      ];
-      featuredRestaurants = restaurants.take(2).toList();
-      trendingRestaurants = restaurants.skip(2).take(1).toList();
-      loading = false;
+      loading = true;
+      hasError = false;
     });
-  }
 
-  Future<void> _fetchFeaturedAndTrending(Map<String, String> headers) async {
     try {
-      if (restaurants.isNotEmpty) {
-        if (mounted) {
+      // Use the restaurant service with filters
+      final fetchedRestaurants = await _restaurantService.getRestaurants(
+        city: selectedCity,
+        search: searchQuery.isNotEmpty ? searchQuery : null,
+        cuisine: selectedCuisines.isNotEmpty ? selectedCuisines.first : null,
+        minRating: minRating > 0 ? minRating : null,
+        maxDistance: maxDistance < 10 ? maxDistance : null,
+        sortBy: sortBy,
+      );
+
+      if (mounted) {
+        setState(() {
+          restaurants = fetchedRestaurants;
+          hasError = false;
+        });
+
+        // Fetch featured and trending only if no search/filters
+        if (searchQuery.isEmpty && selectedCuisines.isEmpty && minRating == 0) {
+          await _fetchFeaturedAndTrending();
+        } else {
           setState(() {
-            featuredRestaurants = restaurants.take(5).toList();
-            trendingRestaurants = restaurants.skip(5).take(5).toList();
+            featuredRestaurants = [];
+            trendingRestaurants = [];
           });
         }
+      }
+    } catch (e) {
+      print('❌ Fetch restaurants error: $e');
+      if (mounted) {
+        setState(() => hasError = true);
+        _toast('Failed to load restaurants', isError: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => loading = false);
+      }
+    }
+  }
+
+  Future<void> _fetchFeaturedAndTrending() async {
+    try {
+      final results = await Future.wait([
+        _restaurantService.getFeaturedRestaurants(),
+        _restaurantService.getTrendingRestaurants(),
+      ]);
+
+      if (mounted) {
+        setState(() {
+          featuredRestaurants = results[0];
+          trendingRestaurants = results[1];
+        });
       }
     } catch (e) {
       print('⚠️ Failed to fetch featured/trending: $e');
@@ -241,51 +169,28 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> fetchBookmarks() async {
-    // try {
-    //   final headers = await _getHeaders();
-    //   final userId = _supabase.auth.currentUser?.id ?? widget.user['id'];
+    try {
+      final bookmarksList = await _userService.getBookmarks();
 
-    //   final response = await http.get(
-    //     Uri.parse('${ApiService.userService}/$userId/bookmarks'),
-    //     headers: headers,
-    //   );
-
-    //   if (response.statusCode == 200) {
-    //     final data = jsonDecode(response.body);
-    //     final bookmarks = data['success'] == true
-    //         ? (data['data'] as List? ?? [])
-    //         : (data is List ? data : []);
-
-    //     if (mounted) {
-    //       setState(() {
-    //         bookmarkedIds = bookmarks
-    //             .map((e) =>
-    //                 (e['restaurantId'] ?? e['restaurantid'] ?? e['id']) as num)
-    //             .map((e) => e.toInt())
-    //             .toList();
-    //       });
-    //     }
-    //   }
-    // } catch (e) {
-    //   print('⚠️ Failed to fetch bookmarks: $e');
-    // }
-
-    setState(() {
-      bookmarkedIds = [1]; // Restaurant ID 1 is bookmarked
-    });
+      if (mounted) {
+        setState(() {
+          bookmarkedIds = bookmarksList
+              .map((e) =>
+                  (e['restaurantId'] ?? e['restaurantid'] ?? e['id']) as num)
+              .map((e) => e.toInt())
+              .toList();
+        });
+      }
+    } catch (e) {
+      print('⚠️ Failed to fetch bookmarks: $e');
+    }
   }
 
   Future<void> toggleBookmark(String restaurantId) async {
     try {
-      final headers = await _getHeaders();
-      final userId = _supabase.auth.currentUser?.id ?? widget.user['id'];
+      final success = await _userService.toggleBookmark(restaurantId);
 
-      final response = await http.post(
-        Uri.parse('${ApiService.userService}/$userId/bookmarks/$restaurantId'),
-        headers: headers,
-      );
-
-      if (response.statusCode == 200) {
+      if (success) {
         await fetchBookmarks();
         if (mounted) {
           _toast('Bookmark updated');
