@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:go_router/go_router.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
+import '../../services/user_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../config/env_config.dart';
 import '../../shared/navigation/bottom_nav.dart';
@@ -23,6 +23,7 @@ class SocialPage extends StatefulWidget {
 class _SocialPageState extends State<SocialPage>
     with SingleTickerProviderStateMixin {
   final _supabase = Supabase.instance.client;
+  final _userService = UserService();
 
   late TabController _tabController;
 
@@ -82,58 +83,15 @@ class _SocialPageState extends State<SocialPage>
     });
 
     try {
-      final headers = await _getHeaders();
-      final userId =
-          _supabase.auth.currentUser?.id ?? widget.user['id']?.toString();
-
-      print('📡 Fetching social data for user: $userId');
-
-      // Fetch all data with proper error handling for each endpoint
+      // Fetch all data in parallel using new services
       final results = await Future.wait([
-        // Ratings
-        _fetchWithFallback(
-          () => http.get(
-            Uri.parse('${EnvConfig.apiBaseUrl}/users/$userId/ratings'),
-            headers: headers,
-          ),
-          'ratings',
-        ),
-
-        // Diary entries
-        _fetchWithFallback(
-          () => http.get(
-            Uri.parse('${EnvConfig.apiBaseUrl}/diary'),
-            headers: headers,
-          ),
-          'diary',
-        ),
-
-        // Bookmarks
-        _fetchWithFallback(
-          () => http.get(
-            Uri.parse('${EnvConfig.apiBaseUrl}/bookmarks'),
-            headers: headers,
-          ),
-          'bookmarks',
-        ),
-
-        // Friends
-        _fetchWithFallback(
-          () => http.get(
-            Uri.parse('${EnvConfig.apiBaseUrl}/friends'),
-            headers: headers,
-          ),
-          'friends',
-        ),
-
-        // Badges
-        _fetchWithFallback(
-          () => http.get(
-            Uri.parse('${EnvConfig.apiBaseUrl}/users/$userId/badges'),
-            headers: headers,
-          ),
-          'badges',
-        ),
+        _userService.getUserRatings(_supabase.auth.currentUser?.id ??
+            widget.user['id']?.toString() ??
+            ''),
+        _userService.getDiary(),
+        _userService.getBookmarks(),
+        _userService.getFriends(),
+        _userService.getBadges(),
       ]);
 
       if (mounted) {
@@ -154,12 +112,6 @@ class _SocialPageState extends State<SocialPage>
           hasError = false;
         });
       }
-    } on TimeoutException {
-      print('❌ Request timeout in fetchAll');
-      if (mounted) {
-        setState(() => hasError = true);
-        _toast('Request timed out. Please try again.', isError: true);
-      }
     } catch (e) {
       print('❌ Social fetchAll error: $e');
       if (mounted) {
@@ -172,54 +124,6 @@ class _SocialPageState extends State<SocialPage>
       }
     }
   }
-
-  /// Fetch with fallback - returns empty list on error
-  Future<List> _fetchWithFallback(
-    Future<http.Response> Function() fetchFn,
-    String endpoint,
-  ) async {
-    try {
-      final response = await fetchFn().timeout(const Duration(seconds: 15));
-
-      print('📡 $endpoint status: ${response.statusCode}');
-
-      if (response.statusCode == 401) {
-        if (mounted) {
-          _toast('Session expired. Please login again.', isError: true);
-          context.go('/auth');
-        }
-        return [];
-      }
-
-      if (response.statusCode == 200) {
-        return _safeParseArray(response.body);
-      }
-
-      // Non-200 status - log and return empty
-      print('⚠️ $endpoint returned ${response.statusCode}');
-      return [];
-    } catch (e) {
-      print('⚠️ Error fetching $endpoint: $e');
-      return [];
-    }
-  }
-
-  List _safeParseArray(String body) {
-    try {
-      final data = jsonDecode(body);
-      if (data is Map && data['success'] == true) {
-        return (data['data'] as List? ?? []);
-      } else if (data is List) {
-        return data;
-      } else {
-        return [];
-      }
-    } catch (e) {
-      print('Array parse error: $e');
-      return [];
-    }
-  }
-
   // ============ DIARY CRUD OPERATIONS ============
 
   Future<void> addDiaryEntry({
@@ -230,51 +134,27 @@ class _SocialPageState extends State<SocialPage>
     String? image,
     bool sharedToFeed = false,
   }) async {
-    if (bevName.isEmpty) {
-      _toast('Please enter drink name', isError: true);
-      return;
-    }
-
-    if (rating < 1 || rating > 5) {
-      _toast('Please select a rating', isError: true);
+    if (bevName.isEmpty || rating < 1 || rating > 5) {
+      _toast('Please enter drink name and rating', isError: true);
       return;
     }
 
     try {
-      final headers = await _getHeaders();
+      final success = await _userService.addDiaryEntry({
+        'bevName': bevName,
+        'restaurant': restaurant,
+        'rating': rating,
+        'notes': notes ?? '',
+        'image': image ?? '',
+        'sharedToFeed': sharedToFeed,
+      });
 
-      final response = await http
-          .post(
-            Uri.parse('${EnvConfig.apiBaseUrl}/diary'),
-            headers: headers,
-            body: jsonEncode({
-              'bevName': bevName,
-              'restaurant': restaurant,
-              'rating': rating,
-              'notes': notes ?? '',
-              'image': image ?? '',
-              'sharedToFeed': sharedToFeed,
-            }),
-          )
-          .timeout(const Duration(seconds: 15));
-
-      print('📡 Add diary response: ${response.statusCode}');
-
-      if (response.statusCode == 401) {
-        _toast('Session expired. Please login again.', isError: true);
-        context.go('/auth');
-        return;
-      }
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
+      if (success) {
         _toast('Diary entry added');
-        // Refresh data
         fetchAll();
       } else {
         _toast('Failed to add diary entry', isError: true);
       }
-    } on TimeoutException {
-      _toast('Request timed out', isError: true);
     } catch (e) {
       print('❌ Add diary error: $e');
       _toast('Error adding diary', isError: true);
@@ -284,32 +164,15 @@ class _SocialPageState extends State<SocialPage>
   Future<void> updateDiaryEntry(
       int entryId, Map<String, dynamic> updates) async {
     try {
-      final headers = await _getHeaders();
+      final success =
+          await _userService.updateDiaryEntry(entryId.toString(), updates);
 
-      final response = await http
-          .patch(
-            Uri.parse('${EnvConfig.apiBaseUrl}/diary/$entryId'),
-            headers: headers,
-            body: jsonEncode(updates),
-          )
-          .timeout(const Duration(seconds: 15));
-
-      print('📡 Update diary response: ${response.statusCode}');
-
-      if (response.statusCode == 401) {
-        _toast('Session expired. Please login again.', isError: true);
-        context.go('/auth');
-        return;
-      }
-
-      if (response.statusCode == 200) {
+      if (success) {
         _toast('Diary updated');
         fetchAll();
       } else {
         _toast('Failed to update diary', isError: true);
       }
-    } on TimeoutException {
-      _toast('Request timed out', isError: true);
     } catch (e) {
       print('❌ Update diary error: $e');
       _toast('Error updating diary', isError: true);
@@ -318,31 +181,14 @@ class _SocialPageState extends State<SocialPage>
 
   Future<void> deleteDiaryEntry(int entryId) async {
     try {
-      final headers = await _getHeaders();
+      final success = await _userService.deleteDiaryEntry(entryId.toString());
 
-      final response = await http
-          .delete(
-            Uri.parse('${EnvConfig.apiBaseUrl}/diary/$entryId'),
-            headers: headers,
-          )
-          .timeout(const Duration(seconds: 15));
-
-      print('📡 Delete diary response: ${response.statusCode}');
-
-      if (response.statusCode == 401) {
-        _toast('Session expired. Please login again.', isError: true);
-        context.go('/auth');
-        return;
-      }
-
-      if (response.statusCode == 200) {
+      if (success) {
         _toast('Diary entry deleted');
         fetchAll();
       } else {
         _toast('Failed to delete diary', isError: true);
       }
-    } on TimeoutException {
-      _toast('Request timed out', isError: true);
     } catch (e) {
       print('❌ Delete diary error: $e');
       _toast('Error deleting diary', isError: true);
@@ -353,76 +199,31 @@ class _SocialPageState extends State<SocialPage>
 
   Future<void> removeBookmark(String restaurantId) async {
     try {
-      final headers = await _getHeaders();
-      final userId =
-          _supabase.auth.currentUser?.id ?? widget.user['id']?.toString();
+      final success = await _userService.removeBookmark(restaurantId);
 
-      final response = await http
-          .delete(
-            Uri.parse(
-                '${EnvConfig.apiBaseUrl}/users/$userId/bookmarks/$restaurantId'),
-            headers: headers,
-          )
-          .timeout(const Duration(seconds: 15));
-
-      print('📡 Remove bookmark response: ${response.statusCode}');
-
-      if (response.statusCode == 401) {
-        _toast('Session expired. Please login again.', isError: true);
-        context.go('/auth');
-        return;
-      }
-
-      if (response.statusCode == 200 || response.statusCode == 204) {
+      if (success) {
         _toast('Bookmark removed');
         fetchAll();
       } else {
         _toast('Failed to remove bookmark', isError: true);
       }
-    } on TimeoutException {
-      _toast('Request timed out', isError: true);
     } catch (e) {
       print('❌ Remove bookmark error: $e');
       _toast('Error removing bookmark', isError: true);
     }
   }
-
   // ============ FRIEND OPERATIONS ============
 
   Future<void> addFriendByPhone(String phone) async {
     try {
-      final headers = await _getHeaders();
-      final userId =
-          _supabase.auth.currentUser?.id ?? widget.user['id']?.toString();
+      final result = await _userService.addFriendByPhone(phone);
 
-      final response = await http
-          .post(
-            Uri.parse('${EnvConfig.apiBaseUrl}/friends'),
-            headers: headers,
-            body: jsonEncode({
-              'userId': userId,
-              'friendPhone': phone,
-            }),
-          )
-          .timeout(const Duration(seconds: 15));
-
-      print('📡 Add friend response: ${response.statusCode}');
-
-      if (response.statusCode == 401) {
-        _toast('Session expired. Please login again.', isError: true);
-        context.go('/auth');
-        return;
-      }
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
+      if (result != null && result['success'] == true) {
         _toast('Friend added');
         fetchAll();
       } else {
-        final data = jsonDecode(response.body);
-        _toast(data['message'] ?? 'Failed to add friend', isError: true);
+        _toast(result?['message'] ?? 'Failed to add friend', isError: true);
       }
-    } on TimeoutException {
-      _toast('Request timed out', isError: true);
     } catch (e) {
       print('❌ Add friend error: $e');
       _toast('Error adding friend', isError: true);
@@ -431,33 +232,14 @@ class _SocialPageState extends State<SocialPage>
 
   Future<void> removeFriend(String friendId) async {
     try {
-      final headers = await _getHeaders();
-      final userId =
-          _supabase.auth.currentUser?.id ?? widget.user['id']?.toString();
+      final success = await _userService.removeFriend(friendId);
 
-      final response = await http
-          .delete(
-            Uri.parse('${EnvConfig.apiBaseUrl}/friends/$userId/$friendId'),
-            headers: headers,
-          )
-          .timeout(const Duration(seconds: 15));
-
-      print('📡 Remove friend response: ${response.statusCode}');
-
-      if (response.statusCode == 401) {
-        _toast('Session expired. Please login again.', isError: true);
-        context.go('/auth');
-        return;
-      }
-
-      if (response.statusCode == 200 || response.statusCode == 204) {
+      if (success) {
         _toast('Friend removed');
         fetchAll();
       } else {
         _toast('Failed to remove friend', isError: true);
       }
-    } on TimeoutException {
-      _toast('Request timed out', isError: true);
     } catch (e) {
       print('❌ Remove friend error: $e');
       _toast('Error removing friend', isError: true);
@@ -468,34 +250,14 @@ class _SocialPageState extends State<SocialPage>
 
   Future<void> claimBadge(int badgeId) async {
     try {
-      final headers = await _getHeaders();
-      final userId =
-          _supabase.auth.currentUser?.id ?? widget.user['id']?.toString();
+      final success = await _userService.claimBadge(badgeId.toString());
 
-      final response = await http
-          .post(
-            Uri.parse('${EnvConfig.apiBaseUrl}/users/$userId/badges/$badgeId'),
-            headers: headers,
-          )
-          .timeout(const Duration(seconds: 15));
-
-      print('📡 Claim badge response: ${response.statusCode}');
-
-      if (response.statusCode == 401) {
-        _toast('Session expired. Please login again.', isError: true);
-        context.go('/auth');
-        return;
-      }
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
+      if (success) {
         _toast('Badge unlocked! 🎉');
         fetchAll();
       } else {
-        final data = jsonDecode(response.body);
-        _toast(data['message'] ?? 'Failed to claim badge', isError: true);
+        _toast('Failed to claim badge', isError: true);
       }
-    } on TimeoutException {
-      _toast('Request timed out', isError: true);
     } catch (e) {
       print('❌ Claim badge error: $e');
       _toast('Error claiming badge', isError: true);
@@ -506,43 +268,21 @@ class _SocialPageState extends State<SocialPage>
 
   Future<void> updateProfile(Map<String, dynamic> updates) async {
     try {
-      final headers = await _getHeaders();
-      final userId =
-          _supabase.auth.currentUser?.id ?? widget.user['id']?.toString();
+      final success = await _userService.updateProfile(updates);
 
-      final response = await http
-          .patch(
-            Uri.parse('${EnvConfig.apiBaseUrl}/users/$userId'),
-            headers: headers,
-            body: jsonEncode(updates),
-          )
-          .timeout(const Duration(seconds: 15));
-
-      print('📡 Update profile response: ${response.statusCode}');
-
-      if (response.statusCode == 401) {
-        _toast('Session expired. Please login again.', isError: true);
-        context.go('/auth');
-        return;
-      }
-
-      if (response.statusCode == 200) {
+      if (success) {
         _toast('Profile updated');
-        // Update local user data
         setState(() {
           widget.user.addAll(updates);
         });
       } else {
         _toast('Failed to update profile', isError: true);
       }
-    } on TimeoutException {
-      _toast('Request timed out', isError: true);
     } catch (e) {
       print('❌ Update profile error: $e');
       _toast('Error updating profile', isError: true);
     }
   }
-
   // ============ UTILITY METHODS ============
 
   void logout() {
@@ -2275,10 +2015,15 @@ class _SocialPageState extends State<SocialPage>
       builder: (context) {
         String searchText = '';
         return AlertDialog(
-          title: Text('Search Friends'),
+          backgroundColor: AppTheme.card,
+          title: Text('Search Friends', style: TextStyle(color: Colors.white)),
           content: TextField(
             onChanged: (v) => searchText = v,
-            decoration: InputDecoration(hintText: 'Enter name or phone'),
+            style: TextStyle(color: Colors.white),
+            decoration: InputDecoration(
+              hintText: 'Enter name or phone',
+              hintStyle: TextStyle(color: AppTheme.textTertiary),
+            ),
           ),
           actions: [
             TextButton(
@@ -2287,7 +2032,9 @@ class _SocialPageState extends State<SocialPage>
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(context, searchText),
-              child: Text('Search'),
+              style:
+                  ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
+              child: Text('Search', style: TextStyle(color: Colors.black)),
             ),
           ],
         );
@@ -2296,15 +2043,11 @@ class _SocialPageState extends State<SocialPage>
 
     if (query != null && query.isNotEmpty) {
       try {
-        final headers = await _getHeaders();
-        final response = await http.get(
-          Uri.parse('${EnvConfig.apiBaseUrl}/friends/search?query=$query'),
-          headers: headers,
-        );
-
-        if (response.statusCode == 200) {
-          final results = jsonDecode(response.body);
+        final results = await _userService.searchFriends(query);
+        if (results.isNotEmpty) {
           _showSearchResults(results);
+        } else {
+          _toast('No users found');
         }
       } catch (e) {
         _toast('Search failed', isError: true);
@@ -2316,20 +2059,63 @@ class _SocialPageState extends State<SocialPage>
     showDialog(
       context: context,
       builder: (context) => Dialog(
-        child: ListView.builder(
-          itemCount: results.length,
-          itemBuilder: (_, i) {
-            final person = results[i];
-            return ListTile(
-              leading: CircleAvatar(child: Text(person['name'][0])),
-              title: Text(person['name']),
-              subtitle: Text(person['phone']),
-              trailing: IconButton(
-                icon: Icon(Icons.person_add),
-                onPressed: () => addFriendByPhone(person['phone']),
+        backgroundColor: AppTheme.card,
+        child: Container(
+          constraints: BoxConstraints(maxHeight: 400),
+          child: Column(
+            children: [
+              Padding(
+                padding: EdgeInsets.all(16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Search Results',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold)),
+                    IconButton(
+                      icon: Icon(Icons.close, color: Colors.white),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
               ),
-            );
-          },
+              Expanded(
+                child: ListView.builder(
+                  itemCount: results.length,
+                  itemBuilder: (_, i) {
+                    final person = results[i];
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: AppTheme.secondary,
+                        child: Text(person['name'][0].toUpperCase(),
+                            style: TextStyle(color: Colors.white)),
+                      ),
+                      title: Text(person['name'],
+                          style: TextStyle(color: Colors.white)),
+                      subtitle: Text(person['phone'] ?? person['email'] ?? '',
+                          style: TextStyle(color: AppTheme.textSecondary)),
+                      trailing: IconButton(
+                        icon: Icon(Icons.person_add, color: AppTheme.primary),
+                        onPressed: () async {
+                          final success = await _userService
+                              .addFriend(person['id'].toString());
+                          if (success) {
+                            Navigator.pop(context);
+                            _toast('Friend added!');
+                            fetchAll();
+                          } else {
+                            _toast('Failed to add friend', isError: true);
+                          }
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
