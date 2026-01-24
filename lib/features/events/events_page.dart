@@ -1,16 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:go_router/go_router.dart';
 import 'dart:async';
 import '../../services/event_service.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../shared/navigation/bottom_nav.dart';
-import '../../config/env_config.dart';
 
 class EventsPage extends StatefulWidget {
   final Map<String, dynamic> user;

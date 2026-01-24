@@ -29,7 +29,8 @@ class RestaurantService {
   // ============ RESTAURANTS ============
 
   /// GET /users/restaurants
-  Future<List> getRestaurants({
+  /// GET /users/restaurants
+  Future<List<Map<String, dynamic>>> getRestaurants({
     String? city,
     double? lat,
     double? lon,
@@ -63,13 +64,77 @@ class RestaurantService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data['success'] == true
-            ? (data['data'] ?? [])
-            : (data is List ? data : []);
+
+        if (data['success'] == true && data['data'] != null) {
+          return List<Map<String, dynamic>>.from(data['data']);
+        }
+
+        // Fallback for direct array response
+        if (data is List) {
+          return List<Map<String, dynamic>>.from(data);
+        }
       }
       return [];
     } catch (e) {
       print('❌ Get restaurants error: $e');
+      return [];
+    }
+  }
+
+  /// GET /users/restaurants/featured
+  Future<List<Map<String, dynamic>>> getFeaturedRestaurants() async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl/restaurants/featured'),
+            headers: headers,
+          )
+          .timeout(EnvConfig.requestTimeout);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        if (data['success'] == true && data['data'] != null) {
+          return List<Map<String, dynamic>>.from(data['data']);
+        }
+
+        if (data is List) {
+          return List<Map<String, dynamic>>.from(data);
+        }
+      }
+      return [];
+    } catch (e) {
+      print('❌ Get featured restaurants error: $e');
+      return [];
+    }
+  }
+
+  /// GET /users/restaurants/trending
+  Future<List<Map<String, dynamic>>> getTrendingRestaurants() async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http
+          .get(
+            Uri.parse('$baseUrl/restaurants/trending'),
+            headers: headers,
+          )
+          .timeout(EnvConfig.requestTimeout);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+
+        if (data['success'] == true && data['data'] != null) {
+          return List<Map<String, dynamic>>.from(data['data']);
+        }
+
+        if (data is List) {
+          return List<Map<String, dynamic>>.from(data);
+        }
+      }
+      return [];
+    } catch (e) {
+      print('❌ Get trending restaurants error: $e');
       return [];
     }
   }
@@ -148,54 +213,6 @@ class RestaurantService {
       return [];
     } catch (e) {
       print('❌ Get nearby restaurants error: $e');
-      return [];
-    }
-  }
-
-  /// GET /users/restaurants/trending
-  Future<List> getTrendingRestaurants() async {
-    try {
-      final headers = await _getHeaders();
-      final response = await http
-          .get(
-            Uri.parse('$baseUrl/restaurants/trending'),
-            headers: headers,
-          )
-          .timeout(EnvConfig.requestTimeout);
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['success'] == true
-            ? (data['data'] ?? [])
-            : (data is List ? data : []);
-      }
-      return [];
-    } catch (e) {
-      print('❌ Get trending restaurants error: $e');
-      return [];
-    }
-  }
-
-  /// GET /users/restaurants/featured
-  Future<List> getFeaturedRestaurants() async {
-    try {
-      final headers = await _getHeaders();
-      final response = await http
-          .get(
-            Uri.parse('$baseUrl/restaurants/featured'),
-            headers: headers,
-          )
-          .timeout(EnvConfig.requestTimeout);
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['success'] == true
-            ? (data['data'] ?? [])
-            : (data is List ? data : []);
-      }
-      return [];
-    } catch (e) {
-      print('❌ Get featured restaurants error: $e');
       return [];
     }
   }

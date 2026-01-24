@@ -1,13 +1,9 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:go_router/go_router.dart';
 import './expert_profile_detail_page.dart';
 import '../../services/expert_service.dart';
 
 import '../../core/theme/app_theme.dart';
-import '../../config/env_config.dart';
 
 class ExpertCornerPage extends StatefulWidget {
   final Map<String, dynamic> user;

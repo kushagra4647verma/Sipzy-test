@@ -233,6 +233,248 @@ class _RestaurantDetailState extends State<RestaurantDetail>
     );
   }
 
+  Widget _buildContactSection() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Contact & Links',
+            style: TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Phone
+          if (restaurant!.phone.isNotEmpty)
+            _buildContactItem(
+              Icons.phone,
+              restaurant!.phone,
+              () => callRestaurant(),
+            ),
+
+          // Email
+          if (restaurant!.contactEmail != null)
+            _buildContactItem(
+              Icons.email,
+              restaurant!.contactEmail!,
+              () async {
+                final uri = Uri.parse('mailto:${restaurant!.contactEmail}');
+                if (await canLaunchUrl(uri)) {
+                  await launchUrl(uri);
+                }
+              },
+            ),
+
+          // Website
+          if (restaurant!.websiteUrl != null)
+            _buildContactItem(
+              Icons.language,
+              restaurant!.websiteUrl!,
+              () async {
+                var url = restaurant!.websiteUrl!;
+                if (!url.startsWith('http')) {
+                  url = 'https://$url';
+                }
+                final uri = Uri.parse(url);
+                if (await canLaunchUrl(uri)) {
+                  await launchUrl(uri);
+                }
+              },
+            ),
+
+          // Social Media
+          const SizedBox(height: 16),
+          const Text(
+            'Follow Us',
+            style: TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              if (restaurant!.instaLink != null &&
+                  restaurant!.instaLink!.isNotEmpty)
+                _buildSocialButton(
+                  Icons.camera_alt,
+                  Colors.purple,
+                  () async {
+                    final uri = Uri.parse(restaurant!.instaLink!);
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri);
+                    }
+                  },
+                ),
+              if (restaurant!.facebookLink != null &&
+                  restaurant!.facebookLink!.isNotEmpty)
+                _buildSocialButton(
+                  Icons.facebook,
+                  Colors.blue,
+                  () async {
+                    final uri = Uri.parse(restaurant!.facebookLink!);
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri);
+                    }
+                  },
+                ),
+              if (restaurant!.twitterLink != null &&
+                  restaurant!.twitterLink!.isNotEmpty)
+                _buildSocialButton(
+                  Icons.flutter_dash, // Or use a Twitter icon
+                  Colors.lightBlue,
+                  () async {
+                    final uri = Uri.parse(restaurant!.twitterLink!);
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri);
+                    }
+                  },
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContactItem(IconData icon, String text, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppTheme.glassLight,
+          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+          border: Border.all(color: AppTheme.border),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: AppTheme.primary, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                text,
+                style: const TextStyle(color: AppTheme.textPrimary),
+              ),
+            ),
+            const Icon(
+              Icons.arrow_forward_ios,
+              color: AppTheme.textTertiary,
+              size: 16,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSocialButton(IconData icon, Color color, VoidCallback onTap) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+            border: Border.all(color: color.withOpacity(0.3)),
+          ),
+          child: Icon(icon, color: color, size: 24),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOpeningHoursSection() {
+    final hours = restaurant!.openingHours;
+    if (hours.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Opening Hours',
+            style: TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: AppTheme.card,
+              borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+              border: Border.all(color: AppTheme.border),
+            ),
+            child: Column(
+              children: hours.map<Widget>((daySchedule) {
+                final day = daySchedule['day'] ?? '';
+                final isClosed = daySchedule['isClosed'] ?? false;
+                final timeSlots = daySchedule['timeSlots'] as List? ?? [];
+
+                return Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: AppTheme.border.withOpacity(0.3),
+                      ),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        day,
+                        style: const TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (isClosed)
+                        const Text(
+                          'Closed',
+                          style: TextStyle(
+                            color: AppTheme.textTertiary,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        )
+                      else
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: timeSlots.map<Widget>((slot) {
+                            return Text(
+                              '${slot['openTime']} - ${slot['closeTime']}',
+                              style: const TextStyle(
+                                color: AppTheme.textSecondary,
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (loading) {
@@ -308,8 +550,10 @@ class _RestaurantDetailState extends State<RestaurantDetail>
 
               // ================= DETAILS =================
               _buildAmenitiesSection(),
+              _buildOpeningHoursSection(),
+              _buildContactSection(),
               _buildPhotoGallerySection(),
-              _buildFoodMenuGallery(), // NEW
+              _buildFoodMenuGallery(),
               _buildEventsSection(),
 
               const SizedBox(height: 80),
@@ -322,7 +566,7 @@ class _RestaurantDetailState extends State<RestaurantDetail>
               open: showInviteModal,
               onClose: () => setState(() => showInviteModal = false),
               user: widget.user,
-              restaurant: restaurant!,
+              restaurant: restaurant!.toMap(),
             ),
         ],
       ),
@@ -349,7 +593,7 @@ class _RestaurantDetailState extends State<RestaurantDetail>
                   context: context,
                   builder: (context) => GroupMixMagicDialog(
                     beverages: filteredBeverages,
-                    restaurant: restaurant!,
+                    restaurant: restaurant!.toMap(),
                   ),
                 );
               },
@@ -368,9 +612,9 @@ class _RestaurantDetailState extends State<RestaurantDetail>
                     ),
                   ],
                 ),
-                child: Row(
+                child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
+                  children: [
                     Icon(Icons.auto_awesome_rounded,
                         color: Colors.white, size: 20),
                     SizedBox(width: 8),
@@ -728,7 +972,7 @@ class _RestaurantDetailState extends State<RestaurantDetail>
   }
 
   Widget _buildPhotoGallerySection() {
-    final photos = restaurant!['photos'] as List? ?? [];
+    final photos = restaurant!.gallery; // Changed from restaurant!['photos']
     if (photos.isEmpty) return const SizedBox.shrink();
 
     return Column(
@@ -783,18 +1027,18 @@ class _RestaurantDetailState extends State<RestaurantDetail>
   }
 
   Widget _buildFoodMenuGallery() {
-    final menuPhotos = restaurant!['menu_photos'] as List? ?? [];
+    final menuPhotos = restaurant!.foodMenuPics;
     if (menuPhotos.isEmpty) return const SizedBox.shrink();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: EdgeInsets.all(16),
+          padding: const EdgeInsets.all(16),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
+              const Text(
                 'Food Menu',
                 style: TextStyle(
                   color: AppTheme.textPrimary,
@@ -804,7 +1048,7 @@ class _RestaurantDetailState extends State<RestaurantDetail>
               ),
               TextButton(
                 onPressed: () => _showFullMenuGallery(),
-                child: Text('View All'),
+                child: const Text('View All'),
               ),
             ],
           ),
@@ -812,56 +1056,83 @@ class _RestaurantDetailState extends State<RestaurantDetail>
         SizedBox(
           height: 200,
           child: ListView.separated(
-            padding: EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             scrollDirection: Axis.horizontal,
             itemCount: menuPhotos.length,
-            separatorBuilder: (_, __) => SizedBox(width: 12),
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
             itemBuilder: (_, i) => ClipRRect(
               borderRadius: BorderRadius.circular(AppTheme.radiusLg),
               child: Image.network(
-                menuPhotos[i]['url'],
+                menuPhotos[i],
                 width: 300,
                 height: 200,
                 fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    width: 300,
+                    height: 200,
+                    color: AppTheme.glassLight,
+                    child: const Icon(
+                      Icons.restaurant_menu,
+                      size: 48,
+                      color: AppTheme.textTertiary,
+                    ),
+                  );
+                },
               ),
             ),
           ),
         ),
-        SizedBox(height: 16),
+        const SizedBox(height: 16),
       ],
     );
   }
 
   void _showFullMenuGallery() {
+    final menuPhotos = restaurant!.foodMenuPics;
+
     showDialog(
       context: context,
       builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
+        backgroundColor: AppTheme.background,
+        insetPadding: const EdgeInsets.all(16),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Food Menu',
-                    style: TextStyle(color: Colors.white, fontSize: 20)),
-                IconButton(
-                  icon: Icon(Icons.close, color: Colors.white),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Food Menu',
+                    style: TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: AppTheme.textPrimary),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
             ),
             Expanded(
               child: GridView.builder(
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                padding: const EdgeInsets.all(16),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 2,
                   crossAxisSpacing: 8,
                   mainAxisSpacing: 8,
                 ),
-                itemCount: restaurant!['menu_photos'].length,
-                itemBuilder: (_, i) => Image.network(
-                  restaurant!['menu_photos'][i]['url'],
-                  fit: BoxFit.cover,
+                itemCount: menuPhotos.length,
+                itemBuilder: (_, i) => ClipRRect(
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                  child: Image.network(
+                    menuPhotos[i],
+                    fit: BoxFit.cover,
+                  ),
                 ),
               ),
             ),

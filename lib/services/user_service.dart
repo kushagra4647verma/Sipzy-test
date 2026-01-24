@@ -1,4 +1,5 @@
 // lib/services/user_service.dart
+// ENHANCED VERSION - BATCH 1: User Profile & Stats APIs
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -68,7 +69,7 @@ class UserService {
     }
   }
 
-  /// GET /users/{user_id}/stats
+  /// GET /users/{user_id}/stats - ✅ NEW
   Future<Map<String, dynamic>> getUserStats(String userId) async {
     try {
       final headers = await _getHeaders();
@@ -83,10 +84,22 @@ class UserService {
         final data = jsonDecode(response.body);
         return data['success'] == true ? data['data'] : data;
       }
-      return {};
+      return {
+        'ratingsCount': 0,
+        'friendsCount': 0,
+        'badgesCount': 0,
+        'bookmarksCount': 0,
+        'diaryEntriesCount': 0,
+      };
     } catch (e) {
       print('❌ Get stats error: $e');
-      return {};
+      return {
+        'ratingsCount': 0,
+        'friendsCount': 0,
+        'badgesCount': 0,
+        'bookmarksCount': 0,
+        'diaryEntriesCount': 0,
+      };
     }
   }
 
@@ -408,6 +421,48 @@ class UserService {
       return response.statusCode == 200 || response.statusCode == 201;
     } catch (e) {
       print('❌ Claim badge error: $e');
+      return false;
+    }
+  }
+
+  // ============ PHOTO UPLOADS - ✅ NEW ============
+
+  /// POST /users/restaurants/{restaurant_id}/photos
+  Future<bool> uploadRestaurantPhoto(
+      String restaurantId, Map<String, dynamic> photoData) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/restaurants/$restaurantId/photos'),
+            headers: headers,
+            body: jsonEncode(photoData),
+          )
+          .timeout(EnvConfig.requestTimeout);
+
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      print('❌ Upload restaurant photo error: $e');
+      return false;
+    }
+  }
+
+  /// POST /users/beverages/{beverage_id}/photos
+  Future<bool> uploadBeveragePhoto(
+      String beverageId, Map<String, dynamic> photoData) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/beverages/$beverageId/photos'),
+            headers: headers,
+            body: jsonEncode(photoData),
+          )
+          .timeout(EnvConfig.requestTimeout);
+
+      return response.statusCode == 200 || response.statusCode == 201;
+    } catch (e) {
+      print('❌ Upload beverage photo error: $e');
       return false;
     }
   }

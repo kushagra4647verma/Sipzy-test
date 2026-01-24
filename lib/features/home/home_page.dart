@@ -1,7 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:go_router/go_router.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -11,8 +9,6 @@ import '../../shared/navigation/bottom_nav.dart';
 import '../../shared/ui/share_modal.dart';
 
 import '../../core/theme/app_theme.dart';
-import '../../services/api_service.dart';
-import '../expert/expert_page.dart';
 
 class HomePage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -111,7 +107,7 @@ class _HomePageState extends State<HomePage> {
     });
 
     try {
-      // Use the restaurant service with filters
+      // ✅ Now properly typed
       final fetchedRestaurants = await _restaurantService.getRestaurants(
         city: selectedCity,
         search: searchQuery.isNotEmpty ? searchQuery : null,
@@ -123,7 +119,7 @@ class _HomePageState extends State<HomePage> {
 
       if (mounted) {
         setState(() {
-          restaurants = fetchedRestaurants;
+          restaurants = fetchedRestaurants; // ✅ No casting needed
           hasError = false;
         });
 
@@ -159,8 +155,8 @@ class _HomePageState extends State<HomePage> {
 
       if (mounted) {
         setState(() {
-          featuredRestaurants = results[0];
-          trendingRestaurants = results[1];
+          featuredRestaurants = results[0]; // ✅ Already typed
+          trendingRestaurants = results[1]; // ✅ Already typed
         });
       }
     } catch (e) {
@@ -969,14 +965,30 @@ class _HomePageState extends State<HomePage> {
   Widget _buildRestaurantCard(Map restaurant) {
     final restaurantId = restaurant['id'];
     final isBookmarked = bookmarkedIds.contains(restaurantId);
+
+    // ✅ FIXED: Use correct field names from API
     final image = restaurant['logoImage'] ??
         restaurant['coverImage'] ??
         restaurant['image'];
+
     final name = restaurant['name'] ?? 'Restaurant';
     final area = restaurant['area'] ?? '';
     final distance = (restaurant['distance'] ?? 0).toDouble();
-    final cuisines = (restaurant['cuisine'] as List?)?.take(2).toList() ?? [];
+
+    // ✅ FIXED: API returns 'cuisineTags' not 'cuisine'
+    final cuisines = (restaurant['cuisineTags'] as List?)?.take(2).toList() ??
+        (restaurant['cuisine'] as List?)?.take(2).toList() ??
+        [];
+
     final topDrink = restaurant['top_drink'] ?? '';
+
+    // ✅ FIXED: Calculate cost_for_two from priceRange if not available
+    final costForTwo = restaurant['cost_for_two'] ??
+        restaurant['costForTwo'] ??
+        (restaurant['priceRange'] ?? 0) * 500;
+
+    // ✅ FIXED: sipzy_rating might not be in list response
+    final rating = restaurant['sipzy_rating'] ?? restaurant['rating'] ?? 4.0;
 
     return GestureDetector(
       onTap: () => context.push('/restaurant/$restaurantId'),
@@ -1023,7 +1035,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
 
-                // ===== Bookmark & Share (STOP tap propagation) =====
+                // Bookmark & Share
                 Positioned(
                   top: 12,
                   right: 12,
@@ -1086,7 +1098,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
 
-                // ===== Name + Location =====
+                // Name + Location
                 Positioned(
                   bottom: 12,
                   left: 12,
@@ -1138,7 +1150,7 @@ class _HomePageState extends State<HomePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ===== Cuisines =====
+                  // Cuisines
                   if (cuisines.isNotEmpty)
                     Wrap(
                       spacing: 6,
@@ -1167,7 +1179,7 @@ class _HomePageState extends State<HomePage> {
                           .toList(),
                     ),
 
-                  // ===== Top Drink =====
+                  // Top Drink
                   if (topDrink.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Row(
@@ -1195,7 +1207,7 @@ class _HomePageState extends State<HomePage> {
 
                   const SizedBox(height: 10),
 
-                  // ===== Rating & Cost =====
+                  // Rating & Cost
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -1215,7 +1227,7 @@ class _HomePageState extends State<HomePage> {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              '${restaurant['sipzy_rating'] ?? 0}',
+                              rating.toStringAsFixed(1),
                               style: const TextStyle(
                                 color: AppTheme.primary,
                                 fontWeight: FontWeight.bold,
@@ -1226,7 +1238,7 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                       Text(
-                        '₹${restaurant['cost_for_two'] ?? 0} for 2',
+                        '₹$costForTwo for 2',
                         style: const TextStyle(
                           color: AppTheme.textSecondary,
                           fontSize: 12,

@@ -83,30 +83,37 @@ class _SocialPageState extends State<SocialPage>
     });
 
     try {
-      // Fetch all data in parallel using new services
+      final userId =
+          _supabase.auth.currentUser?.id ?? widget.user['id']?.toString() ?? '';
+
+      // ✅ BATCH 1: Fetch stats from real API
       final results = await Future.wait([
-        _userService.getUserRatings(_supabase.auth.currentUser?.id ??
-            widget.user['id']?.toString() ??
-            ''),
+        _userService.getUserRatings(userId),
         _userService.getDiary(),
         _userService.getBookmarks(),
         _userService.getFriends(),
         _userService.getBadges(),
+        _userService.getUserStats(userId), // ✅ NEW: Real stats API
       ]);
 
       if (mounted) {
         setState(() {
-          ratings = results[0];
-          diaryEntries = results[1];
-          bookmarks = results[2];
-          friends = results[3];
-          badges = results[4];
+          ratings = (results[0] as List?) ?? [];
+          diaryEntries = (results[1] as List?) ?? [];
+          bookmarks = (results[2] as List?) ?? [];
+          friends = (results[3] as List?) ?? [];
+          badges = (results[4] as List?) ?? [];
 
-          // Calculate stats from actual data
+          // ✅ Use real stats from API instead of calculating
+          final apiStats = results[5] as Map<String, dynamic>;
           stats = {
-            'ratingsCount': ratings.length,
-            'friendsCount': friends.length,
-            'badgesCount': badges.where((b) => b['earned'] == true).length,
+            'ratingsCount': apiStats['ratingsCount'] ?? ratings.length,
+            'friendsCount': apiStats['friendsCount'] ?? friends.length,
+            'badgesCount': apiStats['badgesCount'] ??
+                badges.where((b) => b['earned'] == true).length,
+            'bookmarksCount': apiStats['bookmarksCount'] ?? bookmarks.length,
+            'diaryEntriesCount':
+                apiStats['diaryEntriesCount'] ?? diaryEntries.length,
           };
 
           hasError = false;
@@ -124,6 +131,7 @@ class _SocialPageState extends State<SocialPage>
       }
     }
   }
+
   // ============ DIARY CRUD OPERATIONS ============
 
   Future<void> addDiaryEntry({
@@ -265,16 +273,19 @@ class _SocialPageState extends State<SocialPage>
   }
 
   // ============ USER PROFILE OPERATIONS ============
-
   Future<void> updateProfile(Map<String, dynamic> updates) async {
     try {
       final success = await _userService.updateProfile(updates);
 
       if (success) {
         _toast('Profile updated');
-        setState(() {
-          widget.user.addAll(updates);
-        });
+        // ✅ Refresh profile data from API
+        final updatedProfile = await _userService.getMyProfile();
+        if (updatedProfile != null && mounted) {
+          setState(() {
+            widget.user.addAll(updatedProfile);
+          });
+        }
       } else {
         _toast('Failed to update profile', isError: true);
       }
@@ -283,6 +294,7 @@ class _SocialPageState extends State<SocialPage>
       _toast('Error updating profile', isError: true);
     }
   }
+
   // ============ UTILITY METHODS ============
 
   void logout() {

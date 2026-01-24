@@ -210,7 +210,7 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
       builder: (context) => Dialog(
         backgroundColor: AppTheme.card,
         child: Padding(
-          padding: EdgeInsets.all(24),
+          padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -218,22 +218,22 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Expert Rating Breakdown',
+                  const Text('Expert Rating Breakdown',
                       style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: Colors.white)),
                   IconButton(
                     onPressed: () => Navigator.pop(context),
-                    icon: Icon(Icons.close, color: AppTheme.textTertiary),
+                    icon: const Icon(Icons.close, color: AppTheme.textTertiary),
                   ),
                 ],
               ),
-              SizedBox(height: 16),
-              Text('Tap each category to see details',
+              const SizedBox(height: 16),
+              const Text('Tap each category to see details',
                   style:
                       TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-              SizedBox(height: 24),
+              const SizedBox(height: 24),
               _buildExpandableBreakdownItem('Presentation', 4),
               _buildExpandableBreakdownItem('Taste', 3),
               _buildExpandableBreakdownItem('Ingredients', 3),
@@ -250,7 +250,7 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
       builder: (context, setState) {
         bool expanded = false;
         return Padding(
-          padding: EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.only(bottom: 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -262,9 +262,9 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
                     Row(
                       children: [
                         Text(label,
-                            style: TextStyle(
+                            style: const TextStyle(
                                 color: AppTheme.textSecondary, fontSize: 14)),
-                        SizedBox(width: 8),
+                        const SizedBox(width: 8),
                         Icon(
                           expanded ? Icons.expand_less : Icons.expand_more,
                           size: 16,
@@ -273,34 +273,35 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
                       ],
                     ),
                     Text('$value/5',
-                        style: TextStyle(
+                        style: const TextStyle(
                             color: AppTheme.textPrimary,
                             fontWeight: FontWeight.bold)),
                   ],
                 ),
               ),
-              SizedBox(height: 8),
+              const SizedBox(height: 8),
               ClipRRect(
                 borderRadius: BorderRadius.circular(4),
                 child: LinearProgressIndicator(
                   value: value / 5,
                   backgroundColor: AppTheme.border,
-                  valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primary),
+                  valueColor:
+                      const AlwaysStoppedAnimation<Color>(AppTheme.primary),
                   minHeight: 8,
                 ),
               ),
               if (expanded) ...[
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Container(
-                  padding: EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: AppTheme.glassLight,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
                     'Expert notes: ${_getExpertNotes(label)}',
-                    style:
-                        TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                    style: const TextStyle(
+                        color: AppTheme.textSecondary, fontSize: 12),
                   ),
                 ),
               ],

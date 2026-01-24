@@ -119,9 +119,9 @@ class _ExpertProfileDetailPageState extends State<ExpertProfileDetailPage> {
   @override
   Widget build(BuildContext context) {
     if (loading) {
-      return Scaffold(
+      return const Scaffold(
         backgroundColor: AppTheme.background,
-        body: const Center(
+        body: Center(
           child: CircularProgressIndicator(color: AppTheme.primary),
         ),
       );
