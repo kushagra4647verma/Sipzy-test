@@ -59,20 +59,6 @@ class _SipZyAppState extends State<SipZyApp> {
       }
 
       final isAuthRoute = location == '/auth';
-      final isExpertAuth = location == '/expert/auth';
-
-      // Expert routes protection
-      if (location.startsWith('/expert') && !isExpertAuth) {
-        if (!auth.isExpertLoggedIn) {
-          return '/expert/auth';
-        }
-        return null;
-      }
-
-      // Redirect expert to dashboard if already logged in
-      if (auth.isExpertLoggedIn && isExpertAuth) {
-        return '/expert';
-      }
 
       // Customer routes protection (exclude expert routes)
       if (!location.startsWith('/expert') && !isAuthRoute) {
@@ -154,15 +140,12 @@ class _SipZyAppState extends State<SipZyApp> {
         ),
       ),
 
-      /// ---------------- Expert Corner (Customer View) ----------------
-      /// ✅ FIXED: Place this BEFORE the dynamic /expert/:expertId route
       GoRoute(
         path: '/expert-corner',
         name: 'expert-corner',
         builder: (context, state) => ExpertCornerPage(user: auth.user!),
       ),
 
-      /// ✅ FIXED: Expert Profile Detail (Customer View)
       /// This must come AFTER /expert-corner to avoid route conflict
       GoRoute(
         path: '/expert/:expertId',

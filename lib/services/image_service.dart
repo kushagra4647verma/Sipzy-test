@@ -6,6 +6,8 @@ import '../config/env_config.dart';
 
 class ExpertService {
   final _supabase = Supabase.instance.client;
+
+  // ✅ FIXED: Correct base URL
   static const String baseUrl = 'https://api.sipzy.co.in/users/experts';
 
   Future<Map<String, String>> _getHeaders() async {
@@ -28,7 +30,7 @@ class ExpertService {
   // ============ EXPERTS ============
 
   /// GET /users/experts
-  Future<List> getExperts() async {
+  Future<List<Map<String, dynamic>>> getExperts() async {
     try {
       final headers = await _getHeaders();
 
@@ -42,6 +44,7 @@ class ExpertService {
           .timeout(EnvConfig.requestTimeout);
 
       print('✅ Experts Response: ${response.statusCode}');
+      print('📦 Response Body: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
