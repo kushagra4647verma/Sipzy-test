@@ -237,13 +237,15 @@ class RestaurantService {
             decoded['data'] != null) {
           final restaurants = List<Map<String, dynamic>>.from(decoded['data']);
 
-          // ✅ Calculate distances for featured restaurants
           for (var restaurant in restaurants) {
             _calculateDistanceForRestaurant(restaurant, lat, lon);
           }
 
           return restaurants;
         }
+      } else if (response.statusCode == 404) {
+        print(
+            '⚠️ Featured endpoint not found - feature may not be implemented');
       }
 
       return [];
@@ -259,8 +261,6 @@ class RestaurantService {
     try {
       final headers = await _getHeaders();
       final encodedCity = Uri.encodeComponent(city);
-
-      // ✅ Get user location for distance calculation
       final position = await _locationService.getCurrentLocation();
 
       final response = await http
@@ -275,12 +275,17 @@ class RestaurantService {
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
 
+        // Handle null response
+        if (decoded == null) {
+          print('⚠️ Trending returned null');
+          return [];
+        }
+
         if (decoded is Map &&
             decoded['success'] == true &&
             decoded['data'] != null) {
           final restaurants = List<Map<String, dynamic>>.from(decoded['data']);
 
-          // ✅ Calculate distances for trending restaurants
           for (var restaurant in restaurants) {
             _calculateDistanceForRestaurant(
               restaurant,

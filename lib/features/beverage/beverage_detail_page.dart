@@ -7,6 +7,8 @@ import '../../shared/ui/share_modal.dart';
 import '../../core/theme/app_theme.dart';
 import '../../config/env_config.dart';
 import '../../services/beverage_service.dart';
+import '../../services/camera_service.dart';
+import '../../services/user_service.dart';
 
 class BeverageDetailPage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -25,6 +27,8 @@ class BeverageDetailPage extends StatefulWidget {
 class _BeverageDetailPageState extends State<BeverageDetailPage> {
   final _supabase = Supabase.instance.client;
   final _beverageService = BeverageService();
+  final _cameraService = CameraService();
+  final _userService = UserService();
 
   Map<String, dynamic>? beverage;
   bool loading = true;
@@ -912,8 +916,32 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
     );
   }
 
-  void _showPhotoUpload() {
-    _toast('Photo upload coming soon - will integrate with camera/gallery');
+  void _showPhotoUpload() async {
+    final cameraService = CameraService();
+
+    final photoUrl = await cameraService.pickAndUpload(
+      context: context,
+      bucket: 'beverage-photos',
+      folder: 'user-uploads',
+      filename: '${widget.beverageId}_${DateTime.now().millisecondsSinceEpoch}',
+    );
+
+    if (photoUrl != null) {
+      // Upload to backend
+      final success = await _userService.uploadBeveragePhoto(
+        widget.beverageId,
+        {
+          'url': photoUrl,
+          'caption': 'User uploaded photo',
+        },
+      );
+
+      if (success) {
+        _toast('Photo uploaded successfully!');
+      } else {
+        _toast('Failed to save photo', isError: true);
+      }
+    }
   }
 
   Widget _buildIconAction({

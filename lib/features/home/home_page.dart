@@ -8,7 +8,7 @@ import '../../services/user_service.dart';
 import '../../services/location_service.dart';
 import '../../shared/navigation/bottom_nav.dart';
 import '../../shared/ui/share_modal.dart';
-
+import '../../shared/utils/keyboard_dismisser.dart';
 import '../../core/theme/app_theme.dart';
 
 class HomePage extends StatefulWidget {
@@ -217,9 +217,15 @@ class _HomePageState extends State<HomePage> {
       if (mounted) {
         setState(() {
           bookmarkedIds = bookmarksList
-              .map((e) =>
-                  (e['restaurantId'] ?? e['restaurantid'] ?? e['id']) as num)
-              .map((e) => e.toInt())
+              .map((e) {
+                final id = e['restaurantId'] ?? e['restaurantid'] ?? e['id'];
+                if (id == null) return 0;
+                if (id is int) return id;
+                if (id is String) return int.tryParse(id) ?? 0;
+                if (id is num) return id.toInt();
+                return 0;
+              })
+              .where((id) => id != 0)
               .toList();
         });
       }
@@ -243,6 +249,21 @@ class _HomePageState extends State<HomePage> {
       if (mounted) {
         _toast('Failed to update bookmark', isError: true);
       }
+    }
+  }
+
+  String _getSortLabel() {
+    switch (sortBy) {
+      case 'rating':
+        return 'Highest Rating';
+      case 'distance':
+        return 'Nearest First';
+      case 'cost_low':
+        return 'Cost: Low to High';
+      case 'cost_high':
+        return 'Cost: High to Low';
+      default:
+        return 'Highest Rating';
     }
   }
 
@@ -670,17 +691,19 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            Expanded(child: _buildContent()),
-          ],
+    return KeyboardDismisser(
+      child: Scaffold(
+        backgroundColor: AppTheme.background,
+        body: SafeArea(
+          child: Column(
+            children: [
+              _buildHeader(),
+              Expanded(child: _buildContent()),
+            ],
+          ),
         ),
+        bottomNavigationBar: const BottomNav(active: 'sipzy'),
       ),
-      bottomNavigationBar: const BottomNav(active: 'sipzy'),
     );
   }
 
@@ -884,8 +907,13 @@ class _HomePageState extends State<HomePage> {
             ),
             child: TextField(
               onChanged: (v) {
-                searchQuery = v;
-                fetchRestaurants();
+                setState(() => searchQuery = v);
+                // Debounce search to avoid too many API calls
+                Future.delayed(const Duration(milliseconds: 500), () {
+                  if (searchQuery == v) {
+                    fetchRestaurants();
+                  }
+                });
               },
               style: const TextStyle(color: AppTheme.textPrimary),
               decoration: const InputDecoration(
@@ -904,7 +932,6 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ),
-
           const SizedBox(height: 12),
 
           // Filter & Sort Buttons Row
@@ -977,7 +1004,7 @@ class _HomePageState extends State<HomePage> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'Highest Rating',
+                          _getSortLabel(),
                           style:
                               Theme.of(context).textTheme.bodyMedium?.copyWith(
                                     fontWeight: FontWeight.w500,

@@ -1,6 +1,4 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -9,7 +7,6 @@ import '../../services/beverage_service.dart';
 import '../../services/event_service.dart';
 import '../../services/user_service.dart';
 import '../../core/theme/app_theme.dart';
-import '../../config/env_config.dart';
 import '../../shared/ui/invite_friends_modal.dart';
 import '../../shared/ui/group_mix_magic_dialog.dart';
 import '../../shared/ui/share_modal.dart';
