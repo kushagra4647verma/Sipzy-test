@@ -154,37 +154,27 @@ class _SipZyAppState extends State<SipZyApp> {
         ),
       ),
 
-      /// ---------------- Expert Routes ----------------
-
+      /// ---------------- Expert Corner (Customer View) ----------------
+      /// ✅ FIXED: Place this BEFORE the dynamic /expert/:expertId route
       GoRoute(
         path: '/expert-corner',
         name: 'expert-corner',
         builder: (context, state) => ExpertCornerPage(user: auth.user!),
       ),
 
+      /// ✅ FIXED: Expert Profile Detail (Customer View)
+      /// This must come AFTER /expert-corner to avoid route conflict
       GoRoute(
         path: '/expert/:expertId',
+        name: 'expert-detail',
         builder: (context, state) {
           final expertId = state.pathParameters['expertId']!;
-          final user = state.extra as Map<String, dynamic>? ?? {};
           return ExpertProfileDetailPage(
-            user: user,
+            user: auth.user!,
             expertId: expertId,
           );
         },
       ),
-      // GoRoute(
-      //   path: '/expert/profile',
-      //   name: 'expert-profile',
-      //   builder: (context, state) => ExpertProfilePage(
-      //     expert: auth.expert!,
-      //     onLogout: () {
-      //       setState(() {
-      //         auth.clearExpert();
-      //       });
-      //     },
-      //   ),
-      // ),
     ],
     errorBuilder: (context, state) => Scaffold(
       backgroundColor: const Color(0xFF0A0A0A),

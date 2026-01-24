@@ -9,6 +9,7 @@ import 'location_service.dart';
 
 class RestaurantService {
   final _supabase = Supabase.instance.client;
+  final _locationService = LocationService();
   static const String baseUrl = 'https://api.sipzy.co.in/users';
 
   Future<Map<String, String>> _getHeaders() async {
@@ -28,7 +29,7 @@ class RestaurantService {
     return headers;
   }
 
-  // ============ RESTAURANTS ============
+  // ============ WKB PARSING ============
   Map<String, double>? _parseLocationGeometry(String? wkb) {
     if (wkb == null || wkb.isEmpty) return null;
 
@@ -66,7 +67,7 @@ class RestaurantService {
     }
   }
 
-// Helper: Convert hex string to bytes
+  // Helper: Convert hex string to bytes
   Uint8List _hexToBytes(String hex) {
     final bytes = Uint8List(hex.length ~/ 2);
     for (var i = 0; i < hex.length; i += 2) {
@@ -75,10 +76,64 @@ class RestaurantService {
     return bytes;
   }
 
-// Helper: Convert little-endian bytes to double
   double _bytesToDouble(Uint8List bytes) {
     final byteData = ByteData.sublistView(bytes);
     return byteData.getFloat64(0, Endian.little);
+  }
+
+  /// ✅ FIXED: Calculate distance for restaurant
+  void _calculateDistanceForRestaurant(
+    Map<String, dynamic> restaurant,
+    double? userLat,
+    double? userLon,
+  ) {
+    try {
+      // First parse WKB location if it exists
+      if (restaurant['location'] != null) {
+        final coords = _parseLocationGeometry(restaurant['location']);
+        if (coords != null) {
+          restaurant['lat'] = coords['lat'];
+          restaurant['lon'] = coords['lon'];
+          restaurant['latitude'] = coords['lat'];
+          restaurant['longitude'] = coords['lon'];
+        }
+      }
+
+      // ✅ FIXED: Try multiple field names for coordinates
+      final lat = restaurant['lat'] ??
+          restaurant['latitude'] ??
+          restaurant['restaurantLatitude'];
+      final lon = restaurant['lon'] ??
+          restaurant['longitude'] ??
+          restaurant['restaurantLongitude'];
+
+      // Calculate distance if we have both user and restaurant coordinates
+      if (userLat != null && userLon != null && lat != null && lon != null) {
+        final restaurantLat =
+            lat is num ? lat.toDouble() : double.parse(lat.toString());
+        final restaurantLon =
+            lon is num ? lon.toDouble() : double.parse(lon.toString());
+
+        final distance = _locationService.calculateDistance(
+          userLat,
+          userLon,
+          restaurantLat,
+          restaurantLon,
+        );
+
+        restaurant['distance'] = distance;
+        print(
+            '✅ Calculated distance for ${restaurant['name']}: ${distance.toStringAsFixed(2)} km');
+      } else {
+        // Set default distance if coordinates are missing
+        restaurant['distance'] = 0.0;
+        print(
+            '⚠️ Missing coordinates for ${restaurant['name']} - lat: $lat, lon: $lon, userLat: $userLat, userLon: $userLon');
+      }
+    } catch (e) {
+      print('❌ Error calculating distance for ${restaurant['name']}: $e');
+      restaurant['distance'] = 0.0;
+    }
   }
 
   /// GET /users/restaurants
@@ -110,6 +165,9 @@ class RestaurantService {
       final uri =
           Uri.parse('$baseUrl/restaurants').replace(queryParameters: params);
 
+      print('🌐 Fetching restaurants from: $uri');
+      print('📍 User location: lat=$lat, lon=$lon');
+
       final response = await http
           .get(uri, headers: headers)
           .timeout(EnvConfig.requestTimeout);
@@ -119,30 +177,11 @@ class RestaurantService {
 
         if (data['success'] == true && data['data'] != null) {
           final restaurants = List<Map<String, dynamic>>.from(data['data']);
+          print('✅ Fetched ${restaurants.length} restaurants');
 
-          // ✅ Parse WKB location for each restaurant
+          // ✅ Calculate distance for each restaurant
           for (var restaurant in restaurants) {
-            // Parse location geometry if it exists
-            if (restaurant['location'] != null) {
-              final coords = _parseLocationGeometry(restaurant['location']);
-              if (coords != null) {
-                restaurant['lat'] = coords['lat'];
-                restaurant['lon'] = coords['lon'];
-                restaurant['latitude'] = coords['lat'];
-                restaurant['longitude'] = coords['lon'];
-
-                // Calculate distance if user location is available
-                if (lat != null && lon != null) {
-                  final locationService = LocationService();
-                  restaurant['distance'] = locationService.calculateDistance(
-                    lat,
-                    lon,
-                    coords['lat']!,
-                    coords['lon']!,
-                  );
-                }
-              }
-            }
+            _calculateDistanceForRestaurant(restaurant, lat, lon);
           }
 
           return restaurants;
@@ -151,33 +190,17 @@ class RestaurantService {
         // Fallback for direct array response
         if (data is List) {
           final restaurants = List<Map<String, dynamic>>.from(data);
+          print('✅ Fetched ${restaurants.length} restaurants (direct array)');
 
-          // Parse WKB for fallback too
           for (var restaurant in restaurants) {
-            if (restaurant['location'] != null) {
-              final coords = _parseLocationGeometry(restaurant['location']);
-              if (coords != null) {
-                restaurant['lat'] = coords['lat'];
-                restaurant['lon'] = coords['lon'];
-                restaurant['latitude'] = coords['lat'];
-                restaurant['longitude'] = coords['lon'];
-
-                if (lat != null && lon != null) {
-                  final locationService = LocationService();
-                  restaurant['distance'] = locationService.calculateDistance(
-                    lat,
-                    lon,
-                    coords['lat']!,
-                    coords['lon']!,
-                  );
-                }
-              }
-            }
+            _calculateDistanceForRestaurant(restaurant, lat, lon);
           }
 
           return restaurants;
         }
       }
+
+      print('⚠️ No restaurants found or invalid response');
       return [];
     } catch (e) {
       print('❌ Get restaurants error: $e');
@@ -205,7 +228,6 @@ class RestaurantService {
           .timeout(EnvConfig.requestTimeout);
 
       print('🔥 Featured Response: ${response.statusCode}');
-      print('🔥 Featured Body: ${response.body}');
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
@@ -213,7 +235,14 @@ class RestaurantService {
         if (decoded is Map &&
             decoded['success'] == true &&
             decoded['data'] != null) {
-          return List<Map<String, dynamic>>.from(decoded['data']);
+          final restaurants = List<Map<String, dynamic>>.from(decoded['data']);
+
+          // ✅ Calculate distances for featured restaurants
+          for (var restaurant in restaurants) {
+            _calculateDistanceForRestaurant(restaurant, lat, lon);
+          }
+
+          return restaurants;
         }
       }
 
@@ -231,6 +260,9 @@ class RestaurantService {
       final headers = await _getHeaders();
       final encodedCity = Uri.encodeComponent(city);
 
+      // ✅ Get user location for distance calculation
+      final position = await _locationService.getCurrentLocation();
+
       final response = await http
           .get(
             Uri.parse('$baseUrl/restaurants/trending/$encodedCity'),
@@ -239,7 +271,6 @@ class RestaurantService {
           .timeout(EnvConfig.requestTimeout);
 
       print('📈 Trending Response: ${response.statusCode}');
-      print('📈 Trending Body: ${response.body}');
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
@@ -247,7 +278,18 @@ class RestaurantService {
         if (decoded is Map &&
             decoded['success'] == true &&
             decoded['data'] != null) {
-          return List<Map<String, dynamic>>.from(decoded['data']);
+          final restaurants = List<Map<String, dynamic>>.from(decoded['data']);
+
+          // ✅ Calculate distances for trending restaurants
+          for (var restaurant in restaurants) {
+            _calculateDistanceForRestaurant(
+              restaurant,
+              position?.latitude,
+              position?.longitude,
+            );
+          }
+
+          return restaurants;
         }
       }
 
@@ -274,16 +316,15 @@ class RestaurantService {
         if (body['success'] == true) {
           final restaurantData = body['data'] as Map<String, dynamic>;
 
-          // ✅ Parse WKB location
-          if (restaurantData['location'] != null) {
-            final coords = _parseLocationGeometry(restaurantData['location']);
-            if (coords != null) {
-              restaurantData['lat'] = coords['lat'];
-              restaurantData['lon'] = coords['lon'];
-              restaurantData['latitude'] = coords['lat'];
-              restaurantData['longitude'] = coords['lon'];
-            }
-          }
+          // ✅ Get user location for distance calculation
+          final position = await _locationService.getCurrentLocation();
+
+          // Calculate distance
+          _calculateDistanceForRestaurant(
+            restaurantData,
+            position?.latitude,
+            position?.longitude,
+          );
 
           return Restaurant.fromJson(restaurantData);
         }
@@ -299,6 +340,8 @@ class RestaurantService {
   Future<List> getRestaurantsByCity(String city) async {
     try {
       final headers = await _getHeaders();
+      final position = await _locationService.getCurrentLocation();
+
       final response = await http
           .get(
             Uri.parse(
@@ -309,9 +352,20 @@ class RestaurantService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data['success'] == true
+        final restaurants = data['success'] == true
             ? (data['data'] ?? [])
             : (data is List ? data : []);
+
+        // ✅ Calculate distances
+        for (var restaurant in restaurants) {
+          _calculateDistanceForRestaurant(
+            restaurant as Map<String, dynamic>,
+            position?.latitude,
+            position?.longitude,
+          );
+        }
+
+        return restaurants;
       }
       return [];
     } catch (e) {
@@ -338,9 +392,20 @@ class RestaurantService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data['success'] == true
+        final restaurants = data['success'] == true
             ? (data['data'] ?? [])
             : (data is List ? data : []);
+
+        // ✅ Calculate distances
+        for (var restaurant in restaurants) {
+          _calculateDistanceForRestaurant(
+            restaurant as Map<String, dynamic>,
+            lat,
+            lon,
+          );
+        }
+
+        return restaurants;
       }
       return [];
     } catch (e) {
