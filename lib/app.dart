@@ -15,10 +15,6 @@ import 'features/social/social_page.dart';
 import 'features/expert/expert_page.dart';
 import 'features/expert/expert_profile_detail_page.dart';
 
-// Expert
-
-import 'features/expert/expert_profile_page.dart';
-
 // Theme
 import 'core/theme/app_theme.dart';
 
@@ -177,18 +173,18 @@ class _SipZyAppState extends State<SipZyApp> {
           );
         },
       ),
-      GoRoute(
-        path: '/expert/profile',
-        name: 'expert-profile',
-        builder: (context, state) => ExpertProfilePage(
-          expert: auth.expert!,
-          onLogout: () {
-            setState(() {
-              auth.clearExpert();
-            });
-          },
-        ),
-      ),
+      // GoRoute(
+      //   path: '/expert/profile',
+      //   name: 'expert-profile',
+      //   builder: (context, state) => ExpertProfilePage(
+      //     expert: auth.expert!,
+      //     onLogout: () {
+      //       setState(() {
+      //         auth.clearExpert();
+      //       });
+      //     },
+      //   ),
+      // ),
     ],
     errorBuilder: (context, state) => Scaffold(
       backgroundColor: const Color(0xFF0A0A0A),

@@ -4,6 +4,8 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/env_config.dart';
 import '../../features/models/restaurant_model.dart';
+import 'dart:typed_data';
+import 'location_service.dart';
 
 class RestaurantService {
   final _supabase = Supabase.instance.client;
@@ -27,6 +29,57 @@ class RestaurantService {
   }
 
   // ============ RESTAURANTS ============
+  Map<String, double>? _parseLocationGeometry(String? wkb) {
+    if (wkb == null || wkb.isEmpty) return null;
+
+    try {
+      // PostGIS WKB format for POINT with SRID:
+      // - Byte order (1 byte): 01
+      // - WKB type (4 bytes): 01000020
+      // - SRID (4 bytes): E6100000 (4326 in little-endian)
+      // - X coordinate/Longitude (8 bytes)
+      // - Y coordinate/Latitude (8 bytes)
+
+      if (wkb.length < 50) {
+        print('⚠️ WKB too short: ${wkb.length}');
+        return null;
+      }
+
+      // Extract hex strings for coordinates (skip first 18 chars = 9 bytes)
+      final lonHex = wkb.substring(18, 34); // 8 bytes = 16 hex chars
+      final latHex = wkb.substring(34, 50); // 8 bytes = 16 hex chars
+
+      // Convert hex to bytes
+      final lonBytes = _hexToBytes(lonHex);
+      final latBytes = _hexToBytes(latHex);
+
+      // Convert bytes to double (little-endian)
+      final lon = _bytesToDouble(lonBytes);
+      final lat = _bytesToDouble(latBytes);
+
+      print('📍 Parsed WKB: lat=$lat, lon=$lon');
+
+      return {'lat': lat, 'lon': lon};
+    } catch (e) {
+      print('❌ Error parsing WKB: $e');
+      return null;
+    }
+  }
+
+// Helper: Convert hex string to bytes
+  Uint8List _hexToBytes(String hex) {
+    final bytes = Uint8List(hex.length ~/ 2);
+    for (var i = 0; i < hex.length; i += 2) {
+      bytes[i ~/ 2] = int.parse(hex.substring(i, i + 2), radix: 16);
+    }
+    return bytes;
+  }
+
+// Helper: Convert little-endian bytes to double
+  double _bytesToDouble(Uint8List bytes) {
+    final byteData = ByteData.sublistView(bytes);
+    return byteData.getFloat64(0, Endian.little);
+  }
 
   /// GET /users/restaurants
   Future<List<Map<String, dynamic>>> getRestaurants({
@@ -65,12 +118,64 @@ class RestaurantService {
         final data = jsonDecode(response.body);
 
         if (data['success'] == true && data['data'] != null) {
-          return List<Map<String, dynamic>>.from(data['data']);
+          final restaurants = List<Map<String, dynamic>>.from(data['data']);
+
+          // ✅ Parse WKB location for each restaurant
+          for (var restaurant in restaurants) {
+            // Parse location geometry if it exists
+            if (restaurant['location'] != null) {
+              final coords = _parseLocationGeometry(restaurant['location']);
+              if (coords != null) {
+                restaurant['lat'] = coords['lat'];
+                restaurant['lon'] = coords['lon'];
+                restaurant['latitude'] = coords['lat'];
+                restaurant['longitude'] = coords['lon'];
+
+                // Calculate distance if user location is available
+                if (lat != null && lon != null) {
+                  final locationService = LocationService();
+                  restaurant['distance'] = locationService.calculateDistance(
+                    lat,
+                    lon,
+                    coords['lat']!,
+                    coords['lon']!,
+                  );
+                }
+              }
+            }
+          }
+
+          return restaurants;
         }
 
         // Fallback for direct array response
         if (data is List) {
-          return List<Map<String, dynamic>>.from(data);
+          final restaurants = List<Map<String, dynamic>>.from(data);
+
+          // Parse WKB for fallback too
+          for (var restaurant in restaurants) {
+            if (restaurant['location'] != null) {
+              final coords = _parseLocationGeometry(restaurant['location']);
+              if (coords != null) {
+                restaurant['lat'] = coords['lat'];
+                restaurant['lon'] = coords['lon'];
+                restaurant['latitude'] = coords['lat'];
+                restaurant['longitude'] = coords['lon'];
+
+                if (lat != null && lon != null) {
+                  final locationService = LocationService();
+                  restaurant['distance'] = locationService.calculateDistance(
+                    lat,
+                    lon,
+                    coords['lat']!,
+                    coords['lon']!,
+                  );
+                }
+              }
+            }
+          }
+
+          return restaurants;
         }
       }
       return [];
@@ -167,7 +272,20 @@ class RestaurantService {
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);
         if (body['success'] == true) {
-          return Restaurant.fromJson(body['data']);
+          final restaurantData = body['data'] as Map<String, dynamic>;
+
+          // ✅ Parse WKB location
+          if (restaurantData['location'] != null) {
+            final coords = _parseLocationGeometry(restaurantData['location']);
+            if (coords != null) {
+              restaurantData['lat'] = coords['lat'];
+              restaurantData['lon'] = coords['lon'];
+              restaurantData['latitude'] = coords['lat'];
+              restaurantData['longitude'] = coords['lon'];
+            }
+          }
+
+          return Restaurant.fromJson(restaurantData);
         }
       }
       return null;
