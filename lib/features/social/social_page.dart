@@ -1,14 +1,11 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:go_router/go_router.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/user_service.dart';
 import '../../services/camera_service.dart';
 import '../../core/theme/app_theme.dart';
-import '../../config/env_config.dart';
 import '../../shared/navigation/bottom_nav.dart';
 import '../../ui/toast/sipzy_toast.dart';
 
@@ -53,10 +50,9 @@ class _SocialPageState extends State<SocialPage>
     super.initState();
     _tabController = TabController(length: 5, vsync: this);
 
-    // ✅ FIX: Listen to tab changes to rebuild FAB
     _tabController.addListener(() {
       if (mounted) {
-        setState(() {}); // Rebuild to show/hide FAB
+        setState(() {});
       }
     });
 
@@ -151,11 +147,10 @@ class _SocialPageState extends State<SocialPage>
 
       final success = await _userService.addDiaryEntry({
         'bevName': bevName,
-        'restaurant': restaurant,
+        'restaurant': restaurant.isNotEmpty ? restaurant : null,
         'rating': rating,
-        'notes': notes ?? '',
-        'image': image ?? '',
-        'sharedToFeed': sharedToFeed,
+        'notes': notes?.isNotEmpty == true ? notes : null,
+        'image': image,
       });
 
       if (success) {
