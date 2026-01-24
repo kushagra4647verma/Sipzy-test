@@ -29,7 +29,6 @@ class RestaurantService {
   // ============ RESTAURANTS ============
 
   /// GET /users/restaurants
-  /// GET /users/restaurants
   Future<List<Map<String, dynamic>>> getRestaurants({
     String? city,
     double? lat,

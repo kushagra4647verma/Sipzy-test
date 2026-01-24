@@ -155,8 +155,8 @@ class _HomePageState extends State<HomePage> {
 
       if (mounted) {
         setState(() {
-          featuredRestaurants = results[0]; // ✅ Already typed
-          trendingRestaurants = results[1]; // ✅ Already typed
+          featuredRestaurants = results[0];
+          trendingRestaurants = results[1];
         });
       }
     } catch (e) {
