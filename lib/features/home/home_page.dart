@@ -5,6 +5,7 @@ import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/restaurant_service.dart';
 import '../../services/user_service.dart';
+import '../../services/location_service.dart';
 import '../../shared/navigation/bottom_nav.dart';
 import '../../shared/ui/share_modal.dart';
 
@@ -76,14 +77,30 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
 
-    // Reset filters on load
-    searchQuery = '';
-    selectedCuisines = [];
-    minRating = 0;
-    maxDistance = 10;
-    sortBy = 'rating';
+    setState(() {
+      searchQuery = '';
+      sortBy = 'rating';
+    });
 
+    _initializeLocation();
     _loadAll();
+  }
+
+  Future<void> _initializeLocation() async {
+    final locationService = LocationService();
+
+    // Request location permission
+    final hasPermission = await locationService.requestLocationPermission();
+
+    if (hasPermission) {
+      final position = await locationService.getCurrentLocation();
+
+      if (mounted && position != null && locationService.currentCity != null) {
+        setState(() {
+          selectedCity = locationService.currentCity!;
+        });
+      }
+    }
   }
 
   Future<void> _loadAll() async {
@@ -107,9 +124,24 @@ class _HomePageState extends State<HomePage> {
     });
 
     try {
-      // ✅ Now properly typed
+      // ✅ Get current location
+      final locationService = LocationService();
+      final position = await locationService.getCurrentLocation();
+
+      // ✅ Use detected city or selected city
+      final cityToUse = locationService.currentCity ?? selectedCity;
+
+      setState(() {
+        if (locationService.currentCity != null) {
+          selectedCity = locationService.currentCity!;
+        }
+      });
+
+      // ✅ Fetch restaurants with location
       final fetchedRestaurants = await _restaurantService.getRestaurants(
-        city: selectedCity,
+        city: cityToUse,
+        lat: position?.latitude,
+        lon: position?.longitude,
         search: searchQuery.isNotEmpty ? searchQuery : null,
         cuisine: selectedCuisines.isNotEmpty ? selectedCuisines.first : null,
         minRating: minRating > 0 ? minRating : null,
@@ -119,13 +151,17 @@ class _HomePageState extends State<HomePage> {
 
       if (mounted) {
         setState(() {
-          restaurants = fetchedRestaurants; // ✅ No casting needed
+          restaurants = fetchedRestaurants;
           hasError = false;
         });
 
         // Fetch featured and trending only if no search/filters
         if (searchQuery.isEmpty && selectedCuisines.isEmpty && minRating == 0) {
-          await _fetchFeaturedAndTrending();
+          await _fetchFeaturedAndTrending(
+            city: cityToUse,
+            lat: position?.latitude,
+            lon: position?.longitude,
+          );
         } else {
           setState(() {
             featuredRestaurants = [];
@@ -146,11 +182,21 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _fetchFeaturedAndTrending() async {
+  Future<void> _fetchFeaturedAndTrending({
+    String? city,
+    double? lat,
+    double? lon,
+  }) async {
     try {
       final results = await Future.wait([
-        _restaurantService.getFeaturedRestaurants(),
-        _restaurantService.getTrendingRestaurants(),
+        _restaurantService.getFeaturedRestaurants(
+          lat: lat,
+          lon: lon,
+        ),
+        if (city != null && city.isNotEmpty)
+          _restaurantService.getTrendingRestaurants(city: city)
+        else
+          Future.value(<Map<String, dynamic>>[]),
       ]);
 
       if (mounted) {
@@ -639,40 +685,84 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _showCitySelector() {
+    final locationService = LocationService();
+
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (context) {
-        return ListView(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          children: cities.map((city) {
-            final isSelected = city == selectedCity;
-
-            return ListTile(
-              title: Text(
-                city,
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ✅ Current Location Option
+            ListTile(
+              leading: const Icon(Icons.my_location, color: AppTheme.primary),
+              title: const Text(
+                'Use Current Location',
                 style: TextStyle(
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                  color: isSelected ? AppTheme.primary : AppTheme.textPrimary,
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.primary,
                 ),
               ),
-              trailing: isSelected
-                  ? const Icon(Icons.check, color: AppTheme.primary)
-                  : null,
-              onTap: () {
-                setState(() {
-                  selectedCity = city;
-                });
-
+              onTap: () async {
                 Navigator.pop(context);
 
-                // Optional: refresh data based on city
-                fetchRestaurants();
+                final position = await locationService.getCurrentLocation(
+                    forceRefresh: true);
+
+                if (mounted) {
+                  if (position != null && locationService.currentCity != null) {
+                    setState(() {
+                      selectedCity = locationService.currentCity!;
+                    });
+                    fetchRestaurants();
+                    _toast(
+                        'Location updated to ${locationService.currentCity}');
+                  } else {
+                    _toast('Could not detect your city', isError: true);
+                  }
+                }
               },
-            );
-          }).toList(),
+            ),
+            const Divider(),
+
+            // City List
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: cities.map((city) {
+                  final isSelected = city == selectedCity;
+
+                  return ListTile(
+                    title: Text(
+                      city,
+                      style: TextStyle(
+                        fontWeight:
+                            isSelected ? FontWeight.bold : FontWeight.normal,
+                        color: isSelected
+                            ? AppTheme.primary
+                            : AppTheme.textPrimary,
+                      ),
+                    ),
+                    trailing: isSelected
+                        ? const Icon(Icons.check, color: AppTheme.primary)
+                        : null,
+                    onTap: () {
+                      setState(() {
+                        selectedCity = city;
+                        locationService.setCity(city);
+                      });
+
+                      Navigator.pop(context);
+                      fetchRestaurants();
+                    },
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -698,33 +788,89 @@ class _HomePageState extends State<HomePage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Top Row: Location selector and Expert Corner
-          // Location Selector
-          InkWell(
-            onTap: _showCitySelector,
-            borderRadius: BorderRadius.circular(8),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.location_on,
-                  color: AppTheme.primary,
-                  size: 20,
+          // ✅ NEW: Top Row with Location and Expert Corner
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Location Selector (left)
+              InkWell(
+                onTap: _showCitySelector,
+                borderRadius: BorderRadius.circular(8),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.location_on,
+                      color: AppTheme.primary,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      selectedCity,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(
+                      Icons.keyboard_arrow_down,
+                      color: AppTheme.textSecondary,
+                      size: 20,
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  selectedCity,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
+              ),
+
+              // ✅ Expert Corner Button (right)
+              InkWell(
+                onTap: () => context.push('/expert-corner'),
+                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [AppTheme.secondary, AppTheme.secondaryLight],
+                    ),
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.secondary.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
                       ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.verified,
+                          color: Colors.white,
+                          size: 16,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Text(
+                        'Expert Corner',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(width: 4),
-                const Icon(
-                  Icons.keyboard_arrow_down,
-                  color: AppTheme.textSecondary,
-                  size: 20,
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
 
           const SizedBox(height: 16),
@@ -877,6 +1023,8 @@ class _HomePageState extends State<HomePage> {
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // ❌ REMOVE Expert Corner card from here
+
           // Featured Spots (only when not searching/filtering)
           if (searchQuery.isEmpty &&
               selectedCuisines.isEmpty &&

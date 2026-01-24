@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import './expert_profile_detail_page.dart';
 import '../../services/expert_service.dart';
+import '../expert/expert_profile_detail_page.dart';
 
 import '../../core/theme/app_theme.dart';
 
@@ -143,21 +143,6 @@ class _ExpertCornerPageState extends State<ExpertCornerPage> {
           IconButton(
             onPressed: () => Navigator.pop(context),
             icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [AppTheme.secondary, AppTheme.secondaryLight],
-              ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              Icons.verified,
-              color: Colors.white,
-              size: 24,
-            ),
           ),
           const SizedBox(width: 12),
           const Text(

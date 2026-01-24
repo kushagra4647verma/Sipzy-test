@@ -28,13 +28,12 @@ class UserService {
 
   // ============ USER PROFILE ============
 
-  /// GET /users/me
   Future<Map<String, dynamic>?> getMyProfile() async {
     try {
       final headers = await _getHeaders();
       final response = await http
           .get(
-            Uri.parse('$baseUrl/me'),
+            Uri.parse('$baseUrl/get_my_profile'),
             headers: headers,
           )
           .timeout(EnvConfig.requestTimeout);
@@ -56,7 +55,7 @@ class UserService {
       final headers = await _getHeaders();
       final response = await http
           .patch(
-            Uri.parse('$baseUrl/me'),
+            Uri.parse('$baseUrl/patch_my_profile'),
             headers: headers,
             body: jsonEncode(updates),
           )
@@ -69,13 +68,13 @@ class UserService {
     }
   }
 
-  /// GET /users/{user_id}/stats - ✅ NEW
+  /// GET /users/{user_id}/stats
   Future<Map<String, dynamic>> getUserStats(String userId) async {
     try {
       final headers = await _getHeaders();
       final response = await http
           .get(
-            Uri.parse('$baseUrl/$userId/stats'),
+            Uri.parse('$baseUrl/get_stats/$userId/stats'),
             headers: headers,
           )
           .timeout(EnvConfig.requestTimeout);
@@ -104,22 +103,25 @@ class UserService {
   }
 
   /// GET /users/{user_id}/ratings
-  Future<List> getUserRatings(String userId) async {
+  Future<List<Map<String, dynamic>>> getUserRatings(String userId) async {
     try {
       final headers = await _getHeaders();
       final response = await http
           .get(
-            Uri.parse('$baseUrl/$userId/ratings'),
+            Uri.parse('$baseUrl/get_ratings/$userId/ratings'),
             headers: headers,
           )
           .timeout(EnvConfig.requestTimeout);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data['success'] == true
-            ? (data['data'] ?? [])
-            : (data is List ? data : []);
+        if (data['success'] == true) {
+          return List<Map<String, dynamic>>.from(
+            data['data']['beverageRatings'] ?? [],
+          );
+        }
       }
+
       return [];
     } catch (e) {
       print('❌ Get ratings error: $e');
@@ -135,7 +137,7 @@ class UserService {
       final headers = await _getHeaders();
       final response = await http
           .get(
-            Uri.parse('$baseUrl/diary'),
+            Uri.parse('$baseUrl/diary/get_diary'),
             headers: headers,
           )
           .timeout(EnvConfig.requestTimeout);
@@ -159,7 +161,7 @@ class UserService {
       final headers = await _getHeaders();
       final response = await http
           .post(
-            Uri.parse('$baseUrl/diary/'),
+            Uri.parse('$baseUrl/diary/post_diary'),
             headers: headers,
             body: jsonEncode(entry),
           )
@@ -179,7 +181,7 @@ class UserService {
       final headers = await _getHeaders();
       final response = await http
           .patch(
-            Uri.parse('$baseUrl/diary/$entryId'),
+            Uri.parse('$baseUrl/diary/patch_diary/$entryId'),
             headers: headers,
             body: jsonEncode(updates),
           )
@@ -198,7 +200,7 @@ class UserService {
       final headers = await _getHeaders();
       final response = await http
           .delete(
-            Uri.parse('$baseUrl/diary/$entryId'),
+            Uri.parse('$baseUrl/diary/delete_diary/$entryId'),
             headers: headers,
           )
           .timeout(EnvConfig.requestTimeout);
@@ -218,7 +220,7 @@ class UserService {
       final headers = await _getHeaders();
       final response = await http
           .get(
-            Uri.parse('$baseUrl/bookmarks'),
+            Uri.parse('$baseUrl/bookmarks/get_bookmarks'),
             headers: headers,
           )
           .timeout(EnvConfig.requestTimeout);
@@ -242,7 +244,7 @@ class UserService {
       final headers = await _getHeaders();
       final response = await http
           .post(
-            Uri.parse('$baseUrl/bookmarks/$restaurantId'),
+            Uri.parse('$baseUrl/bookmarks/post_bookmark/$restaurantId'),
             headers: headers,
           )
           .timeout(EnvConfig.requestTimeout);
@@ -260,7 +262,7 @@ class UserService {
       final headers = await _getHeaders();
       final response = await http
           .delete(
-            Uri.parse('$baseUrl/bookmarks/$restaurantId'),
+            Uri.parse('$baseUrl/bookmarks/delete_bookmark/$restaurantId'),
             headers: headers,
           )
           .timeout(EnvConfig.requestTimeout);
@@ -280,7 +282,7 @@ class UserService {
       final headers = await _getHeaders();
       final response = await http
           .get(
-            Uri.parse('$baseUrl/friends'),
+            Uri.parse('$baseUrl/friends/get_friend'),
             headers: headers,
           )
           .timeout(EnvConfig.requestTimeout);
@@ -304,7 +306,7 @@ class UserService {
       final headers = await _getHeaders();
       final response = await http
           .post(
-            Uri.parse('$baseUrl/friends/$userId'),
+            Uri.parse('$baseUrl/friends/post_friend/$userId'),
             headers: headers,
           )
           .timeout(EnvConfig.requestTimeout);
@@ -322,7 +324,7 @@ class UserService {
       final headers = await _getHeaders();
       final response = await http
           .delete(
-            Uri.parse('$baseUrl/friends/$userId'),
+            Uri.parse('$baseUrl/friends/delete_friend/$userId'),
             headers: headers,
           )
           .timeout(EnvConfig.requestTimeout);
@@ -389,7 +391,7 @@ class UserService {
       final headers = await _getHeaders();
       final response = await http
           .get(
-            Uri.parse('$baseUrl/me/badges'),
+            Uri.parse('$baseUrl/get_my_badges'),
             headers: headers,
           )
           .timeout(EnvConfig.requestTimeout);
@@ -413,7 +415,7 @@ class UserService {
       final headers = await _getHeaders();
       final response = await http
           .post(
-            Uri.parse('$baseUrl/me/badges/$badgeId/claim'),
+            Uri.parse('$baseUrl/post_my_badges/$badgeId/claim'),
             headers: headers,
           )
           .timeout(EnvConfig.requestTimeout);

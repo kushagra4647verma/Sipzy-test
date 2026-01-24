@@ -58,24 +58,6 @@ class _SocialPageState extends State<SocialPage>
     super.dispose();
   }
 
-  Future<Map<String, String>> _getHeaders() async {
-    final session = _supabase.auth.currentSession;
-    final user = _supabase.auth.currentUser;
-
-    final headers = {'Content-Type': 'application/json'};
-
-    if (session?.accessToken != null) {
-      headers['Authorization'] = 'Bearer ${session!.accessToken}';
-    }
-
-    final effectiveUserId = user?.id ?? widget.user['id']?.toString();
-    if (effectiveUserId != null) {
-      headers['x-user-id'] = effectiveUserId;
-    }
-
-    return headers;
-  }
-
   Future<void> fetchAll() async {
     setState(() {
       loading = true;
@@ -690,12 +672,6 @@ class _SocialPageState extends State<SocialPage>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 4),
-            Text(
-              rating['restaurant'] ?? '',
-              style:
-                  const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
-            ),
-            const SizedBox(height: 8),
             Row(
               children: [
                 ...List.generate(
@@ -716,13 +692,15 @@ class _SocialPageState extends State<SocialPage>
                 ),
               ],
             ),
-            if (rating['review'] != null &&
-                rating['review'].toString().isNotEmpty) ...[
+            if (rating['comments'] != null &&
+                rating['comments'].toString().isNotEmpty) ...[
               const SizedBox(height: 8),
               Text(
-                rating['review'],
+                rating['comments'],
                 style: const TextStyle(
-                    color: AppTheme.textSecondary, fontSize: 13),
+                  color: AppTheme.textSecondary,
+                  fontSize: 13,
+                ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),

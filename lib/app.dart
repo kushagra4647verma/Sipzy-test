@@ -16,9 +16,8 @@ import 'features/expert/expert_page.dart';
 import 'features/expert/expert_profile_detail_page.dart';
 
 // Expert
-import 'features/expert/expert_dashboard.dart';
+
 import 'features/expert/expert_profile_page.dart';
-import 'features/expert/expert_tasks_page.dart';
 
 // Theme
 import 'core/theme/app_theme.dart';
@@ -132,11 +131,7 @@ class _SipZyAppState extends State<SipZyApp> {
           restaurantId: state.pathParameters['id']!,
         ),
       ),
-      GoRoute(
-        path: '/expert-corner',
-        name: 'expert-corner',
-        builder: (context, state) => ExpertCornerPage(user: auth.user!),
-      ),
+
       GoRoute(
         path: '/beverage/:id',
         name: 'beverage',
@@ -164,28 +159,13 @@ class _SipZyAppState extends State<SipZyApp> {
       ),
 
       /// ---------------- Expert Routes ----------------
+
       GoRoute(
-        path: '/expert/auth',
-        name: 'expert-auth',
-        builder: (context, state) => AuthPage(
-          onLogin: (data) {
-            setState(() {
-              auth.expert = data['user'];
-              auth.expertToken = data['token'];
-            });
-          },
-        ),
+        path: '/expert-corner',
+        name: 'expert-corner',
+        builder: (context, state) => ExpertCornerPage(user: auth.user!),
       ),
-      GoRoute(
-        path: '/expert',
-        name: 'expert',
-        builder: (context, state) => ExpertDashboard(expert: auth.expert!),
-      ),
-      GoRoute(
-        path: '/expert/tasks',
-        name: 'expert-tasks',
-        builder: (context, state) => ExpertTasksPage(expert: auth.expert!),
-      ),
+
       GoRoute(
         path: '/expert/:expertId',
         builder: (context, state) {

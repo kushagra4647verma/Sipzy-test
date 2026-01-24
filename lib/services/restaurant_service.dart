@@ -80,28 +80,38 @@ class RestaurantService {
     }
   }
 
-  /// GET /users/restaurants/featured
-  Future<List<Map<String, dynamic>>> getFeaturedRestaurants() async {
+  Future<List<Map<String, dynamic>>> getFeaturedRestaurants({
+    double? lat,
+    double? lon,
+  }) async {
     try {
+      if (lat == null || lon == null) {
+        print('⚠️ Location not available for featured restaurants');
+        return [];
+      }
+
       final headers = await _getHeaders();
+
       final response = await http
           .get(
-            Uri.parse('$baseUrl/restaurants/featured'),
+            Uri.parse('$baseUrl/restaurants/featured/$lat/$lon'),
             headers: headers,
           )
           .timeout(EnvConfig.requestTimeout);
 
+      print('🔥 Featured Response: ${response.statusCode}');
+      print('🔥 Featured Body: ${response.body}');
+
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        final decoded = jsonDecode(response.body);
 
-        if (data['success'] == true && data['data'] != null) {
-          return List<Map<String, dynamic>>.from(data['data']);
-        }
-
-        if (data is List) {
-          return List<Map<String, dynamic>>.from(data);
+        if (decoded is Map &&
+            decoded['success'] == true &&
+            decoded['data'] != null) {
+          return List<Map<String, dynamic>>.from(decoded['data']);
         }
       }
+
       return [];
     } catch (e) {
       print('❌ Get featured restaurants error: $e');
@@ -109,28 +119,33 @@ class RestaurantService {
     }
   }
 
-  /// GET /users/restaurants/trending
-  Future<List<Map<String, dynamic>>> getTrendingRestaurants() async {
+  Future<List<Map<String, dynamic>>> getTrendingRestaurants({
+    required String city,
+  }) async {
     try {
       final headers = await _getHeaders();
+      final encodedCity = Uri.encodeComponent(city);
+
       final response = await http
           .get(
-            Uri.parse('$baseUrl/restaurants/trending'),
+            Uri.parse('$baseUrl/restaurants/trending/$encodedCity'),
             headers: headers,
           )
           .timeout(EnvConfig.requestTimeout);
 
+      print('📈 Trending Response: ${response.statusCode}');
+      print('📈 Trending Body: ${response.body}');
+
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        final decoded = jsonDecode(response.body);
 
-        if (data['success'] == true && data['data'] != null) {
-          return List<Map<String, dynamic>>.from(data['data']);
-        }
-
-        if (data is List) {
-          return List<Map<String, dynamic>>.from(data);
+        if (decoded is Map &&
+            decoded['success'] == true &&
+            decoded['data'] != null) {
+          return List<Map<String, dynamic>>.from(decoded['data']);
         }
       }
+
       return [];
     } catch (e) {
       print('❌ Get trending restaurants error: $e');
