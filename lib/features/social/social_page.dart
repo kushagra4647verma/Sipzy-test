@@ -6,9 +6,11 @@ import 'package:go_router/go_router.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../services/user_service.dart';
+import '../../services/camera_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../config/env_config.dart';
 import '../../shared/navigation/bottom_nav.dart';
+import '../../ui/toast/sipzy_toast.dart';
 
 class SocialPage extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -24,6 +26,7 @@ class _SocialPageState extends State<SocialPage>
     with SingleTickerProviderStateMixin {
   final _supabase = Supabase.instance.client;
   final _userService = UserService();
+  final _cameraService = CameraService();
 
   late TabController _tabController;
 
@@ -43,12 +46,20 @@ class _SocialPageState extends State<SocialPage>
   List bookmarks = [];
   List friends = [];
 
-  String badgeFilter = 'all'; // all, earned, in_progress
+  String badgeFilter = 'all';
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 5, vsync: this);
+
+    // ✅ FIX: Listen to tab changes to rebuild FAB
+    _tabController.addListener(() {
+      if (mounted) {
+        setState(() {}); // Rebuild to show/hide FAB
+      }
+    });
+
     fetchAll();
   }
 
@@ -68,14 +79,15 @@ class _SocialPageState extends State<SocialPage>
       final userId =
           _supabase.auth.currentUser?.id ?? widget.user['id']?.toString() ?? '';
 
-      // ✅ BATCH 1: Fetch stats from real API
+      print('🔄 Fetching all data for user: $userId');
+
       final results = await Future.wait([
         _userService.getUserRatings(userId),
         _userService.getDiary(),
         _userService.getBookmarks(),
         _userService.getFriends(),
         _userService.getBadges(),
-        _userService.getUserStats(userId), // ✅ NEW: Real stats API
+        _userService.getUserStats(userId),
       ]);
 
       if (mounted) {
@@ -86,7 +98,12 @@ class _SocialPageState extends State<SocialPage>
           friends = (results[3] as List?) ?? [];
           badges = (results[4] as List?) ?? [];
 
-          // ✅ Use real stats from API instead of calculating
+          // ✅ DEBUG: Log diary entries
+          print('📖 Diary entries loaded: ${diaryEntries.length}');
+          if (diaryEntries.isNotEmpty) {
+            print('📖 First entry: ${diaryEntries[0]}');
+          }
+
           final apiStats = results[5] as Map<String, dynamic>;
           stats = {
             'ratingsCount': apiStats['ratingsCount'] ?? ratings.length,
@@ -105,7 +122,7 @@ class _SocialPageState extends State<SocialPage>
       print('❌ Social fetchAll error: $e');
       if (mounted) {
         setState(() => hasError = true);
-        _toast('Failed to load profile data', isError: true);
+        _showToast('Failed to load profile data', isError: true);
       }
     } finally {
       if (mounted) {
@@ -125,11 +142,13 @@ class _SocialPageState extends State<SocialPage>
     bool sharedToFeed = false,
   }) async {
     if (bevName.isEmpty || rating < 1 || rating > 5) {
-      _toast('Please enter drink name and rating', isError: true);
+      _showToast('Please enter drink name and rating', isError: true);
       return;
     }
 
     try {
+      print('📝 Adding diary entry: $bevName');
+
       final success = await _userService.addDiaryEntry({
         'bevName': bevName,
         'restaurant': restaurant,
@@ -140,48 +159,49 @@ class _SocialPageState extends State<SocialPage>
       });
 
       if (success) {
-        _toast('Diary entry added');
-        fetchAll();
+        _showToast('Diary entry added');
+        await fetchAll(); // Refresh to show new entry
       } else {
-        _toast('Failed to add diary entry', isError: true);
+        _showToast('Failed to add diary entry', isError: true);
       }
     } catch (e) {
       print('❌ Add diary error: $e');
-      _toast('Error adding diary', isError: true);
+      _showToast('Error adding diary', isError: true);
     }
   }
 
   Future<void> updateDiaryEntry(
-      int entryId, Map<String, dynamic> updates) async {
+      String entryId, Map<String, dynamic> updates) async {
     try {
-      final success =
-          await _userService.updateDiaryEntry(entryId.toString(), updates);
+      final success = await _userService.updateDiaryEntry(entryId, updates);
 
       if (success) {
-        _toast('Diary updated');
+        _showToast('Diary updated');
         fetchAll();
       } else {
-        _toast('Failed to update diary', isError: true);
+        _showToast('Failed to update diary', isError: true);
       }
     } catch (e) {
       print('❌ Update diary error: $e');
-      _toast('Error updating diary', isError: true);
+      _showToast('Error updating diary', isError: true);
     }
   }
 
-  Future<void> deleteDiaryEntry(int entryId) async {
+  Future<void> deleteDiaryEntry(String entryId) async {
     try {
-      final success = await _userService.deleteDiaryEntry(entryId.toString());
+      print('🗑️ Deleting diary entry: $entryId');
+
+      final success = await _userService.deleteDiaryEntry(entryId);
 
       if (success) {
-        _toast('Diary entry deleted');
-        fetchAll();
+        _showToast('Diary entry deleted');
+        await fetchAll();
       } else {
-        _toast('Failed to delete diary', isError: true);
+        _showToast('Failed to delete diary', isError: true);
       }
     } catch (e) {
       print('❌ Delete diary error: $e');
-      _toast('Error deleting diary', isError: true);
+      _showToast('Error deleting diary', isError: true);
     }
   }
 
@@ -192,16 +212,17 @@ class _SocialPageState extends State<SocialPage>
       final success = await _userService.removeBookmark(restaurantId);
 
       if (success) {
-        _toast('Bookmark removed');
+        _showToast('Bookmark removed');
         fetchAll();
       } else {
-        _toast('Failed to remove bookmark', isError: true);
+        _showToast('Failed to remove bookmark', isError: true);
       }
     } catch (e) {
       print('❌ Remove bookmark error: $e');
-      _toast('Error removing bookmark', isError: true);
+      _showToast('Error removing bookmark', isError: true);
     }
   }
+
   // ============ FRIEND OPERATIONS ============
 
   Future<void> addFriendByPhone(String phone) async {
@@ -209,14 +230,14 @@ class _SocialPageState extends State<SocialPage>
       final result = await _userService.addFriendByPhone(phone);
 
       if (result != null && result['success'] == true) {
-        _toast('Friend added');
+        _showToast('Friend added');
         fetchAll();
       } else {
-        _toast(result?['message'] ?? 'Failed to add friend', isError: true);
+        _showToast(result?['message'] ?? 'Failed to add friend', isError: true);
       }
     } catch (e) {
       print('❌ Add friend error: $e');
-      _toast('Error adding friend', isError: true);
+      _showToast('Error adding friend', isError: true);
     }
   }
 
@@ -225,14 +246,14 @@ class _SocialPageState extends State<SocialPage>
       final success = await _userService.removeFriend(friendId);
 
       if (success) {
-        _toast('Friend removed');
+        _showToast('Friend removed');
         fetchAll();
       } else {
-        _toast('Failed to remove friend', isError: true);
+        _showToast('Failed to remove friend', isError: true);
       }
     } catch (e) {
       print('❌ Remove friend error: $e');
-      _toast('Error removing friend', isError: true);
+      _showToast('Error removing friend', isError: true);
     }
   }
 
@@ -243,14 +264,14 @@ class _SocialPageState extends State<SocialPage>
       final success = await _userService.claimBadge(badgeId.toString());
 
       if (success) {
-        _toast('Badge unlocked! 🎉');
+        _showToast('Badge unlocked! 🎉');
         fetchAll();
       } else {
-        _toast('Failed to claim badge', isError: true);
+        _showToast('Failed to claim badge', isError: true);
       }
     } catch (e) {
       print('❌ Claim badge error: $e');
-      _toast('Error claiming badge', isError: true);
+      _showToast('Error claiming badge', isError: true);
     }
   }
 
@@ -260,8 +281,7 @@ class _SocialPageState extends State<SocialPage>
       final success = await _userService.updateProfile(updates);
 
       if (success) {
-        _toast('Profile updated');
-        // ✅ Refresh profile data from API
+        _showToast('Profile updated');
         final updatedProfile = await _userService.getMyProfile();
         if (updatedProfile != null && mounted) {
           setState(() {
@@ -269,11 +289,11 @@ class _SocialPageState extends State<SocialPage>
           });
         }
       } else {
-        _toast('Failed to update profile', isError: true);
+        _showToast('Failed to update profile', isError: true);
       }
     } catch (e) {
       print('❌ Update profile error: $e');
-      _toast('Error updating profile', isError: true);
+      _showToast('Error updating profile', isError: true);
     }
   }
 
@@ -308,24 +328,19 @@ class _SocialPageState extends State<SocialPage>
     );
   }
 
-  void _toast(String msg, {bool isError = false}) {
+  void _showToast(String msg, {bool isError = false}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: isError ? Colors.red.shade600 : AppTheme.card,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-        ),
-        margin: const EdgeInsets.all(16),
-        duration: const Duration(seconds: 2),
-      ),
+    SipzyToast.show(
+      context,
+      title: msg,
+      type: isError ? ToastType.destructive : ToastType.normal,
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    print('🔨 Building SocialPage - Current tab: ${_tabController.index}');
+
     if (loading) {
       return Scaffold(
         backgroundColor: AppTheme.background,
@@ -341,6 +356,10 @@ class _SocialPageState extends State<SocialPage>
         bottomNavigationBar: const BottomNav(active: 'social'),
       );
     }
+
+    // ✅ FIX: Check current tab for FAB visibility
+    final showFAB = _tabController.index == 1;
+    print('🎯 FAB should show: $showFAB (tab index: ${_tabController.index})');
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -370,14 +389,24 @@ class _SocialPageState extends State<SocialPage>
         ),
       ),
       bottomNavigationBar: const BottomNav(active: 'social'),
-      floatingActionButton: _tabController.index == 1
+      // ✅ FIX: Always show FAB when on diary tab
+      floatingActionButton: showFAB
           ? FloatingActionButton.extended(
               backgroundColor: AppTheme.primary,
-              onPressed: _showAddDiaryDialog,
-              icon: const Icon(Icons.add, color: Colors.black),
-              label: const Text('Add Entry',
-                  style: TextStyle(
-                      color: Colors.black, fontWeight: FontWeight.bold)),
+              foregroundColor: Colors.black,
+              onPressed: () {
+                print('➕ Add Diary button pressed');
+                _showAddDiaryDialog();
+              },
+              icon: const Icon(Icons.add, color: Colors.black, size: 24),
+              label: const Text(
+                'Add Entry',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                ),
+              ),
             )
           : null,
     );
@@ -399,7 +428,6 @@ class _SocialPageState extends State<SocialPage>
       ),
       child: Column(
         children: [
-          // Avatar with gradient ring
           Container(
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
@@ -446,8 +474,6 @@ class _SocialPageState extends State<SocialPage>
                 ?.copyWith(color: AppTheme.textTertiary),
           ),
           const SizedBox(height: 20),
-
-          // Stats Summary
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
@@ -459,8 +485,6 @@ class _SocialPageState extends State<SocialPage>
             ],
           ),
           const SizedBox(height: 20),
-
-          // Edit Profile & Logout buttons
           Row(
             children: [
               Expanded(
@@ -511,27 +535,28 @@ class _SocialPageState extends State<SocialPage>
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppTheme.card,
-        title: Text('Edit Profile', style: TextStyle(color: Colors.white)),
+        title:
+            const Text('Edit Profile', style: TextStyle(color: Colors.white)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameCtrl,
-              decoration: InputDecoration(labelText: 'Name'),
-              style: TextStyle(color: Colors.white),
+              decoration: const InputDecoration(labelText: 'Name'),
+              style: const TextStyle(color: Colors.white),
             ),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
             TextField(
               controller: emailCtrl,
-              decoration: InputDecoration(labelText: 'Email'),
-              style: TextStyle(color: Colors.white),
+              decoration: const InputDecoration(labelText: 'Email'),
+              style: const TextStyle(color: Colors.white),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Cancel'),
+            child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () {
@@ -541,7 +566,7 @@ class _SocialPageState extends State<SocialPage>
               });
               Navigator.pop(context);
             },
-            child: Text('Save'),
+            child: const Text('Save'),
           ),
         ],
       ),
@@ -573,19 +598,20 @@ class _SocialPageState extends State<SocialPage>
     return Column(
       children: [
         Container(
-          padding: EdgeInsets.all(8),
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: color.withOpacity(0.2),
             shape: BoxShape.circle,
           ),
           child: Icon(icon, color: color, size: 20),
         ),
-        SizedBox(height: 8),
+        const SizedBox(height: 8),
         Text('$value',
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
-        SizedBox(height: 4),
+            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 4),
         Text(label,
-            style: TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
+            style:
+                const TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
       ],
     );
   }
@@ -708,7 +734,6 @@ class _SocialPageState extends State<SocialPage>
           ],
         ),
         onTap: () {
-          // Navigate to beverage detail
           if (beverageId != null) {
             context.push('/beverage/$beverageId');
           }
@@ -719,11 +744,13 @@ class _SocialPageState extends State<SocialPage>
 
   // ============ TAB 2: DRINK DIARY ============
   Widget _diaryTab() {
+    print('📖 Building diary tab - Entries count: ${diaryEntries.length}');
+
     if (diaryEntries.isEmpty) {
       return _buildEmptyState(
         icon: Icons.book_outlined,
         title: 'No diary entries yet',
-        subtitle: 'Tap the + button to add your first drink memory',
+        subtitle: 'Tap the + button below to add your first drink memory',
       );
     }
 
@@ -732,13 +759,24 @@ class _SocialPageState extends State<SocialPage>
       itemCount: diaryEntries.length,
       itemBuilder: (_, i) {
         final entry = diaryEntries[i];
+        print(
+            '📖 Building card for entry $i: ${entry['bevName'] ?? entry['bev_name']}');
         return _buildDiaryCard(entry);
       },
     );
   }
 
   Widget _buildDiaryCard(Map entry) {
-    final entryId = entry['id'] ?? entry['entryid'] ?? entry['entryId'];
+    // ✅ FIX: Handle multiple possible field names from API
+    final entryId = entry['entryId'] ?? entry['entryid'] ?? entry['id'];
+    final bevName = entry['bevName'] ?? entry['bev_name'] ?? 'Drink';
+    final restaurant = entry['restaurant'] ?? '';
+    final rating = entry['rating'] ?? 0;
+    final notes = entry['notes'] ?? '';
+    final image = entry['image'];
+    final createdAt = entry['createdAt'] ?? entry['created_at'] ?? '';
+    final sharedToFeed =
+        entry['sharedToFeed'] ?? entry['shared_to_feed'] ?? false;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -751,27 +789,28 @@ class _SocialPageState extends State<SocialPage>
         contentPadding: const EdgeInsets.all(16),
         leading: ClipRRect(
           borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-          child: entry['image'] != null && entry['image'].toString().isNotEmpty
-              ? Image.network(entry['image'],
+          child: image != null && image.toString().isNotEmpty
+              ? Image.network(
+                  image,
                   width: 60,
                   height: 60,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => _buildPlaceholderIcon())
+                  errorBuilder: (_, __, ___) => _buildPlaceholderIcon(),
+                )
               : _buildPlaceholderIcon(),
         ),
         title: Row(
           children: [
             Expanded(
               child: Text(
-                entry['bevName'] ?? entry['bev_name'] ?? 'Drink',
+                bevName,
                 style: const TextStyle(
                     color: AppTheme.textPrimary,
                     fontWeight: FontWeight.bold,
                     fontSize: 16),
               ),
             ),
-            if (entry['sharedToFeed'] == true ||
-                entry['shared_to_feed'] == true)
+            if (sharedToFeed == true)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
@@ -799,37 +838,34 @@ class _SocialPageState extends State<SocialPage>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 4),
-            Text(
-              entry['restaurant'] ?? '',
-              style:
-                  const TextStyle(color: AppTheme.textSecondary, fontSize: 13),
-            ),
+            if (restaurant.isNotEmpty)
+              Text(
+                restaurant,
+                style: const TextStyle(
+                    color: AppTheme.textSecondary, fontSize: 13),
+              ),
             const SizedBox(height: 8),
             Row(
               children: [
                 ...List.generate(
                     5,
                     (index) => Icon(
-                          index < (entry['rating'] ?? 0)
-                              ? Icons.star
-                              : Icons.star_border,
+                          index < rating ? Icons.star : Icons.star_border,
                           color: AppTheme.primary,
                           size: 16,
                         )),
                 const SizedBox(width: 12),
                 Text(
-                  _formatDateTime(
-                      entry['createdAt'] ?? entry['created_at'] ?? ''),
+                  _formatDateTime(createdAt),
                   style: const TextStyle(
                       color: AppTheme.textTertiary, fontSize: 11),
                 ),
               ],
             ),
-            if (entry['notes'] != null &&
-                entry['notes'].toString().isNotEmpty) ...[
+            if (notes.isNotEmpty) ...[
               const SizedBox(height: 8),
               Text(
-                entry['notes'],
+                notes,
                 style: const TextStyle(
                     color: AppTheme.textSecondary, fontSize: 13),
                 maxLines: 2,
@@ -847,12 +883,16 @@ class _SocialPageState extends State<SocialPage>
     );
   }
 
+  // ✅ COMPLETE Add Diary Dialog with Camera Integration
   void _showAddDiaryDialog() {
+    print('📝 Opening Add Diary Dialog');
+
     final nameController = TextEditingController();
     final restaurantController = TextEditingController();
     final notesController = TextEditingController();
     int rating = 3;
     bool shareToFeed = false;
+    String? uploadedImageUrl;
 
     showDialog(
       context: context,
@@ -882,9 +922,25 @@ class _SocialPageState extends State<SocialPage>
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Photo upload placeholder
+                // Photo upload
                 GestureDetector(
-                  onTap: () => _toast('Camera/Gallery picker coming soon'),
+                  onTap: () async {
+                    print('📷 Opening camera/gallery picker');
+
+                    final imageUrl = await _cameraService.pickAndUpload(
+                      context: context,
+                      bucket: 'diary-photos',
+                      folder: 'user-${_supabase.auth.currentUser?.id}',
+                    );
+
+                    if (imageUrl != null) {
+                      print('✅ Photo uploaded: $imageUrl');
+                      setDialogState(() {
+                        uploadedImageUrl = imageUrl;
+                      });
+                      _showToast('Photo uploaded successfully');
+                    }
+                  },
                   child: Container(
                     height: 140,
                     width: double.infinity,
@@ -893,30 +949,60 @@ class _SocialPageState extends State<SocialPage>
                       borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                       border: Border.all(
                           color: AppTheme.border, style: BorderStyle.solid),
+                      image: uploadedImageUrl != null
+                          ? DecorationImage(
+                              image: NetworkImage(uploadedImageUrl!),
+                              fit: BoxFit.cover,
+                            )
+                          : null,
                     ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primary.withOpacity(0.2),
-                            shape: BoxShape.circle,
+                    child: uploadedImageUrl == null
+                        ? Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primary.withOpacity(0.2),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(Icons.add_a_photo,
+                                    color: AppTheme.primary, size: 32),
+                              ),
+                              const SizedBox(height: 12),
+                              const Text('Add Photo',
+                                  style: TextStyle(
+                                      color: AppTheme.textSecondary,
+                                      fontWeight: FontWeight.w500)),
+                              const SizedBox(height: 4),
+                              const Text('Camera or Gallery',
+                                  style: TextStyle(
+                                      color: AppTheme.textTertiary,
+                                      fontSize: 11)),
+                            ],
+                          )
+                        : Stack(
+                            children: [
+                              Positioned(
+                                top: 8,
+                                right: 8,
+                                child: GestureDetector(
+                                  onTap: () => setDialogState(() {
+                                    uploadedImageUrl = null;
+                                  }),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: const BoxDecoration(
+                                      color: Colors.black54,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.close,
+                                        color: Colors.white, size: 20),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                          child: const Icon(Icons.add_a_photo,
-                              color: AppTheme.primary, size: 32),
-                        ),
-                        const SizedBox(height: 12),
-                        const Text('Add Photo',
-                            style: TextStyle(
-                                color: AppTheme.textSecondary,
-                                fontWeight: FontWeight.w500)),
-                        const SizedBox(height: 4),
-                        const Text('Camera or Gallery',
-                            style: TextStyle(
-                                color: AppTheme.textTertiary, fontSize: 11)),
-                      ],
-                    ),
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -1035,20 +1121,24 @@ class _SocialPageState extends State<SocialPage>
             ElevatedButton(
               onPressed: () {
                 if (nameController.text.trim().isEmpty) {
-                  _toast('Please enter drink name', isError: true);
+                  _showToast('Please enter drink name', isError: true);
                   return;
                 }
+
                 Navigator.pop(context);
+
                 addDiaryEntry(
                   bevName: nameController.text.trim(),
                   restaurant: restaurantController.text.trim(),
                   rating: rating,
                   notes: notesController.text.trim(),
+                  image: uploadedImageUrl,
                   sharedToFeed: shareToFeed,
                 );
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.primary,
+                foregroundColor: Colors.black,
                 padding:
                     const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               ),
@@ -1063,7 +1153,15 @@ class _SocialPageState extends State<SocialPage>
   }
 
   void _viewDiaryEntry(Map entry) {
-    final entryId = entry['id'] ?? entry['entryid'] ?? entry['entryId'];
+    final entryId = entry['entryId'] ?? entry['entryid'] ?? entry['id'];
+    final bevName = entry['bevName'] ?? entry['bev_name'] ?? 'Drink';
+    final restaurant = entry['restaurant'] ?? '';
+    final rating = entry['rating'] ?? 0;
+    final notes = entry['notes'] ?? '';
+    final image = entry['image'];
+    final createdAt = entry['createdAt'] ?? entry['created_at'] ?? '';
+    final sharedToFeed =
+        entry['sharedToFeed'] ?? entry['shared_to_feed'] ?? false;
 
     showDialog(
       context: context,
@@ -1075,12 +1173,11 @@ class _SocialPageState extends State<SocialPage>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image
-            if (entry['image'] != null && entry['image'].toString().isNotEmpty)
+            if (image != null && image.toString().isNotEmpty)
               ClipRRect(
                 borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(AppTheme.radiusLg)),
-                child: Image.network(entry['image'],
+                child: Image.network(image,
                     height: 240, width: double.infinity, fit: BoxFit.cover),
               )
             else
@@ -1105,15 +1202,14 @@ class _SocialPageState extends State<SocialPage>
                     children: [
                       Expanded(
                         child: Text(
-                          entry['bevName'] ?? entry['bev_name'] ?? 'Drink',
+                          bevName,
                           style: const TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
                               color: Colors.white),
                         ),
                       ),
-                      if (entry['sharedToFeed'] == true ||
-                          entry['shared_to_feed'] == true)
+                      if (sharedToFeed == true)
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 10, vertical: 6),
@@ -1139,15 +1235,14 @@ class _SocialPageState extends State<SocialPage>
                     ],
                   ),
                   const SizedBox(height: 8),
-                  if (entry['restaurant'] != null &&
-                      entry['restaurant'].toString().isNotEmpty)
+                  if (restaurant.isNotEmpty)
                     Row(
                       children: [
                         const Icon(Icons.location_on,
                             size: 16, color: AppTheme.textSecondary),
                         const SizedBox(width: 6),
                         Text(
-                          entry['restaurant'],
+                          restaurant,
                           style: const TextStyle(
                               color: AppTheme.textSecondary, fontSize: 14),
                         ),
@@ -1159,23 +1254,19 @@ class _SocialPageState extends State<SocialPage>
                       ...List.generate(
                           5,
                           (index) => Icon(
-                                index < (entry['rating'] ?? 0)
-                                    ? Icons.star
-                                    : Icons.star_border,
+                                index < rating ? Icons.star : Icons.star_border,
                                 color: AppTheme.primary,
                                 size: 20,
                               )),
                       const SizedBox(width: 12),
                       Text(
-                        _formatDateTime(
-                            entry['createdAt'] ?? entry['created_at'] ?? ''),
+                        _formatDateTime(createdAt),
                         style: const TextStyle(
                             color: AppTheme.textTertiary, fontSize: 13),
                       ),
                     ],
                   ),
-                  if (entry['notes'] != null &&
-                      entry['notes'].toString().isNotEmpty) ...[
+                  if (notes.isNotEmpty) ...[
                     const SizedBox(height: 16),
                     const Divider(color: AppTheme.border),
                     const SizedBox(height: 16),
@@ -1186,7 +1277,7 @@ class _SocialPageState extends State<SocialPage>
                             fontWeight: FontWeight.w600)),
                     const SizedBox(height: 8),
                     Text(
-                      entry['notes'],
+                      notes,
                       style: const TextStyle(
                           color: AppTheme.textPrimary,
                           fontSize: 14,
@@ -1200,7 +1291,7 @@ class _SocialPageState extends State<SocialPage>
                         child: OutlinedButton.icon(
                           onPressed: () {
                             Navigator.pop(context);
-                            _toast('Edit feature coming soon');
+                            _showToast('Edit feature coming soon');
                           },
                           icon: const Icon(Icons.edit, size: 18),
                           label: const Text('Edit'),
@@ -1239,7 +1330,7 @@ class _SocialPageState extends State<SocialPage>
 
   void _confirmDeleteDiary(dynamic entryId) {
     if (entryId == null) {
-      _toast('Invalid entry ID', isError: true);
+      _showToast('Invalid entry ID', isError: true);
       return;
     }
 
@@ -1261,8 +1352,7 @@ class _SocialPageState extends State<SocialPage>
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
-              deleteDiaryEntry(
-                  entryId is int ? entryId : int.parse(entryId.toString()));
+              deleteDiaryEntry(entryId.toString());
             },
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('Delete', style: TextStyle(color: Colors.white)),
@@ -1276,7 +1366,6 @@ class _SocialPageState extends State<SocialPage>
   Widget _badgesTab() {
     return Column(
       children: [
-        // Sub-tabs filter
         Container(
           padding: const EdgeInsets.all(16),
           decoration: const BoxDecoration(
@@ -1478,7 +1567,6 @@ class _SocialPageState extends State<SocialPage>
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ===== Tier Header =====
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
@@ -1517,10 +1605,7 @@ class _SocialPageState extends State<SocialPage>
               ),
             ),
             const SizedBox(height: 12),
-
-            // ===== Badge Cards =====
             ...tierBadges.map((badge) => _buildBadgeCard(badge as Map)),
-
             const SizedBox(height: 20),
           ],
         );
@@ -1550,7 +1635,6 @@ class _SocialPageState extends State<SocialPage>
         ),
         child: Row(
           children: [
-            // Badge Icon
             Container(
               width: 60,
               height: 60,
@@ -1895,7 +1979,6 @@ class _SocialPageState extends State<SocialPage>
               bookmark['name']),
         ),
         onTap: () {
-          // Navigate to restaurant detail
           if (restaurantId != null) {
             context.push('/restaurant/$restaurantId');
           }
@@ -1906,7 +1989,7 @@ class _SocialPageState extends State<SocialPage>
 
   void _confirmRemoveBookmark(String restaurantId, String name) {
     if (restaurantId.isEmpty) {
-      _toast('Invalid restaurant ID', isError: true);
+      _showToast('Invalid restaurant ID', isError: true);
       return;
     }
 
@@ -1942,7 +2025,6 @@ class _SocialPageState extends State<SocialPage>
   Widget _friendsTab() {
     return Column(
       children: [
-        // Action buttons
         Container(
           padding: const EdgeInsets.all(16),
           decoration: const BoxDecoration(
@@ -1952,7 +2034,7 @@ class _SocialPageState extends State<SocialPage>
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () => _toast('Add from contacts coming soon'),
+                  onPressed: () => _showToast('Add from contacts coming soon'),
                   icon: const Icon(Icons.contact_phone, size: 18),
                   label: const Text('Phone Book'),
                   style: OutlinedButton.styleFrom(
@@ -1966,8 +2048,8 @@ class _SocialPageState extends State<SocialPage>
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: () => _showFriendSearch(),
-                  icon: Icon(Icons.search, size: 18),
-                  label: Text('Search Friends'),
+                  icon: const Icon(Icons.search, size: 18),
+                  label: const Text('Search Friends'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.secondary,
                     padding: const EdgeInsets.symmetric(vertical: 12),
@@ -1984,7 +2066,7 @@ class _SocialPageState extends State<SocialPage>
                   title: 'No friends yet',
                   subtitle: 'Connect with other SipZy users',
                   actionLabel: 'Find Friends',
-                  onAction: () => _toast('Friend search coming soon'),
+                  onAction: () => _showToast('Friend search coming soon'),
                 )
               : ListView.builder(
                   padding: const EdgeInsets.all(16),
@@ -2006,11 +2088,12 @@ class _SocialPageState extends State<SocialPage>
         String searchText = '';
         return AlertDialog(
           backgroundColor: AppTheme.card,
-          title: Text('Search Friends', style: TextStyle(color: Colors.white)),
+          title: const Text('Search Friends',
+              style: TextStyle(color: Colors.white)),
           content: TextField(
             onChanged: (v) => searchText = v,
-            style: TextStyle(color: Colors.white),
-            decoration: InputDecoration(
+            style: const TextStyle(color: Colors.white),
+            decoration: const InputDecoration(
               hintText: 'Enter name or phone',
               hintStyle: TextStyle(color: AppTheme.textTertiary),
             ),
@@ -2018,13 +2101,14 @@ class _SocialPageState extends State<SocialPage>
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text('Cancel'),
+              child: const Text('Cancel'),
             ),
             ElevatedButton(
               onPressed: () => Navigator.pop(context, searchText),
               style:
                   ElevatedButton.styleFrom(backgroundColor: AppTheme.primary),
-              child: Text('Search', style: TextStyle(color: Colors.black)),
+              child:
+                  const Text('Search', style: TextStyle(color: Colors.black)),
             ),
           ],
         );
@@ -2037,10 +2121,10 @@ class _SocialPageState extends State<SocialPage>
         if (results.isNotEmpty) {
           _showSearchResults(results);
         } else {
-          _toast('No users found');
+          _showToast('No users found');
         }
       } catch (e) {
-        _toast('Search failed', isError: true);
+        _showToast('Search failed', isError: true);
       }
     }
   }
@@ -2051,21 +2135,21 @@ class _SocialPageState extends State<SocialPage>
       builder: (context) => Dialog(
         backgroundColor: AppTheme.card,
         child: Container(
-          constraints: BoxConstraints(maxHeight: 400),
+          constraints: const BoxConstraints(maxHeight: 400),
           child: Column(
             children: [
               Padding(
-                padding: EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Search Results',
+                    const Text('Search Results',
                         style: TextStyle(
                             color: Colors.white,
                             fontSize: 18,
                             fontWeight: FontWeight.bold)),
                     IconButton(
-                      icon: Icon(Icons.close, color: Colors.white),
+                      icon: const Icon(Icons.close, color: Colors.white),
                       onPressed: () => Navigator.pop(context),
                     ),
                   ],
@@ -2080,23 +2164,25 @@ class _SocialPageState extends State<SocialPage>
                       leading: CircleAvatar(
                         backgroundColor: AppTheme.secondary,
                         child: Text(person['name'][0].toUpperCase(),
-                            style: TextStyle(color: Colors.white)),
+                            style: const TextStyle(color: Colors.white)),
                       ),
                       title: Text(person['name'],
-                          style: TextStyle(color: Colors.white)),
+                          style: const TextStyle(color: Colors.white)),
                       subtitle: Text(person['phone'] ?? person['email'] ?? '',
-                          style: TextStyle(color: AppTheme.textSecondary)),
+                          style:
+                              const TextStyle(color: AppTheme.textSecondary)),
                       trailing: IconButton(
-                        icon: Icon(Icons.person_add, color: AppTheme.primary),
+                        icon: const Icon(Icons.person_add,
+                            color: AppTheme.primary),
                         onPressed: () async {
                           final success = await _userService
                               .addFriend(person['id'].toString());
                           if (success) {
                             Navigator.pop(context);
-                            _toast('Friend added!');
+                            _showToast('Friend added!');
                             fetchAll();
                           } else {
-                            _toast('Failed to add friend', isError: true);
+                            _showToast('Failed to add friend', isError: true);
                           }
                         },
                       ),
@@ -2123,9 +2209,9 @@ class _SocialPageState extends State<SocialPage>
         contentPadding: const EdgeInsets.all(16),
         leading: Container(
           padding: const EdgeInsets.all(2),
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             shape: BoxShape.circle,
-            gradient: const LinearGradient(
+            gradient: LinearGradient(
               colors: [AppTheme.primary, AppTheme.secondary],
             ),
           ),
@@ -2175,8 +2261,7 @@ class _SocialPageState extends State<SocialPage>
         ),
         trailing: const Icon(Icons.chevron_right, color: AppTheme.textTertiary),
         onTap: () {
-          // Navigate to friend's public profile
-          _toast('View profile coming soon');
+          _showToast('View profile coming soon');
         },
       ),
     );

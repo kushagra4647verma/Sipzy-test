@@ -1,4 +1,4 @@
-‘’’
+
 # Uncomment this line to define a global platform for your project
 # platform :ios, '13.0'
 
@@ -50,4 +50,3 @@ post_install do |installer|
     end
   end
 end
-'''
