@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/env_config.dart';
+import '../../features/models/restaurant_model.dart';
 
 class RestaurantService {
   final _supabase = Supabase.instance.client;
@@ -74,7 +75,7 @@ class RestaurantService {
   }
 
   /// GET /restaurants/{restaurant_id}
-  Future<Map<String, dynamic>?> getRestaurant(String restaurantId) async {
+  Future<Restaurant?> getRestaurant(String restaurantId) async {
     try {
       final headers = await _getHeaders();
       final response = await http
@@ -85,8 +86,10 @@ class RestaurantService {
           .timeout(EnvConfig.requestTimeout);
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['success'] == true ? data['data'] : data;
+        final body = jsonDecode(response.body);
+        if (body['success'] == true) {
+          return Restaurant.fromJson(body['data']);
+        }
       }
       return null;
     } catch (e) {

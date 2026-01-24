@@ -13,6 +13,7 @@ import '../../config/env_config.dart';
 import '../../shared/ui/invite_friends_modal.dart';
 import '../../shared/ui/group_mix_magic_dialog.dart';
 import '../../shared/ui/share_modal.dart';
+import '../../features/models/restaurant_model.dart';
 
 class RestaurantDetail extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -35,8 +36,8 @@ class _RestaurantDetailState extends State<RestaurantDetail>
   final _beverageService = BeverageService();
   final _eventService = EventService();
   final _userService = UserService();
+  Restaurant? restaurant;
 
-  Map<String, dynamic>? restaurant;
   List beverages = [];
   List filteredBeverages = [];
   List topSipzyBeverages = [];
@@ -83,28 +84,26 @@ class _RestaurantDetailState extends State<RestaurantDetail>
     });
 
     try {
-      // Fetch all data in parallel
       final results = await Future.wait([
-        _restaurantService.getRestaurant(widget.restaurantId),
+        _restaurantService.getRestaurant(widget.restaurantId), // Restaurant?
         _restaurantService.getRestaurantBeverages(widget.restaurantId),
         _eventService.getEvents(restaurantId: widget.restaurantId),
         _restaurantService.getExpertRecommendations(widget.restaurantId),
       ]);
 
-      if (mounted) {
-        setState(() {
-          restaurant = results[0] as Map<String, dynamic>?;
-          beverages = results[1] as List;
-          events = results[2] as List;
-          expertRecommendations = results[3] as List;
+      if (!mounted) return;
 
-          // Categorize beverages
-          _categorizeBeverages();
-          filterAndSort();
+      setState(() {
+        restaurant = results[0] as Restaurant?;
+        beverages = results[1] as List;
+        events = results[2] as List;
+        expertRecommendations = results[3] as List;
 
-          hasError = false;
-        });
-      }
+        _categorizeBeverages();
+        filterAndSort();
+
+        hasError = restaurant == null;
+      });
     } catch (e) {
       print('❌ Fetch restaurant error: $e');
       if (mounted) {
