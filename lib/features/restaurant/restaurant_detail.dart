@@ -588,9 +588,9 @@ class _RestaurantDetailState extends State<RestaurantDetail>
 
                 showDialog(
                   context: context,
-                  builder: (context) => GroupMixMagicDialog(
-                    beverages: filteredBeverages,
-                    restaurant: restaurant!.toMap(),
+                  builder: (_) => GroupMixMagicDialog(
+                    beverages: beverages,
+                    restaurant: restaurant!,
                   ),
                 );
               },
@@ -637,7 +637,6 @@ class _RestaurantDetailState extends State<RestaurantDetail>
               showDialog(
                 context: context,
                 builder: (context) => ShareModal(
-                  open: true,
                   onClose: () => Navigator.pop(context),
                   item: {
                     'title': restaurant!['name'] ?? 'Restaurant',
@@ -1553,7 +1552,6 @@ class _RestaurantDetailState extends State<RestaurantDetail>
                           showDialog(
                             context: context,
                             builder: (context) => ShareModal(
-                              open: true,
                               onClose: () => Navigator.pop(context),
                               item: {
                                 'title': bev['name'] ?? 'Beverage',

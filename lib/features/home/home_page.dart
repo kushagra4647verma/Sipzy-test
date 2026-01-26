@@ -1244,7 +1244,6 @@ class _HomePageState extends State<HomePage> {
                           showDialog(
                             context: context,
                             builder: (context) => ShareModal(
-                              open: true,
                               onClose: () => Navigator.pop(context),
                               item: {
                                 'title': name,

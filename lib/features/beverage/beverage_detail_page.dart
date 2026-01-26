@@ -892,7 +892,6 @@ class _BeverageDetailPageState extends State<BeverageDetailPage> {
               showDialog(
                 context: context,
                 builder: (context) => ShareModal(
-                  open: true,
                   onClose: () => Navigator.pop(context),
                   item: {
                     'title': beverage!['name'] ?? 'Beverage',

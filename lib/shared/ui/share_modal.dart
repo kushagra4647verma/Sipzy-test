@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../core/theme/app_theme.dart';
 
 class ShareModal extends StatelessWidget {
-  final bool open;
   final VoidCallback onClose;
   final Map<String, dynamic> item;
 
   const ShareModal({
     super.key,
-    required this.open,
     required this.onClose,
     required this.item,
   });
@@ -29,21 +28,24 @@ class ShareModal extends StatelessWidget {
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: AppTheme.card,
+      insetPadding: const EdgeInsets.all(16),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppTheme.radiusXl),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Header
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text(
                   'Share',
                   style: TextStyle(
-                    fontSize: 20,
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
                   ),
@@ -54,34 +56,81 @@ class ShareModal extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            Text(
-              item['title'] ?? 'Share this item',
-              style: const TextStyle(
-                color: AppTheme.textPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
+
+            const SizedBox(height: 12),
+
+            // Item preview (title + price)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.background,
+                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                border: Border.all(color: AppTheme.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item['title'] ?? 'Item',
+                    style: const TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${item['subtitle'] ?? ''} • ₹${item['price'] ?? ''}',
+                    style: const TextStyle(
+                        color: AppTheme.textSecondary, fontSize: 12),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+
+            const SizedBox(height: 20),
+
+            // Share options grid
+            GridView.count(
+              shrinkWrap: true,
+              crossAxisCount: 3,
+              mainAxisSpacing: 16,
+              crossAxisSpacing: 16,
+              childAspectRatio: 1,
+              physics: const NeverScrollableScrollPhysics(),
               children: [
-                _buildShareOption(
-                  context,
-                  Icons.link,
-                  'Copy Link',
-                  () => _copyToClipboard(context),
+                _shareTile(
+                  icon: FontAwesomeIcons.whatsapp,
+                  label: 'WhatsApp',
+                  color: const Color(0xFF25D366),
+                  onTap: () {},
                 ),
-                _buildShareOption(
-                  context,
-                  Icons.share,
-                  'Share',
-                  () {
-                    // In real app, use share_plus package
-                    _copyToClipboard(context);
-                    onClose();
-                  },
+                _shareTile(
+                  icon: FontAwesomeIcons.facebookF,
+                  label: 'Facebook',
+                  color: const Color(0xFF1877F2),
+                  onTap: () {},
+                ),
+                _shareTile(
+                  icon: FontAwesomeIcons.xTwitter,
+                  label: 'Twitter',
+                  color: Colors.white,
+                  onTap: () {},
+                ),
+                _shareTile(
+                  icon: FontAwesomeIcons.instagram,
+                  label: 'Instagram',
+                  color: const Color(0xFFE4405F),
+                  onTap: () {},
+                ),
+                _shareTile(
+                  icon: FontAwesomeIcons.envelope,
+                  label: 'Email',
+                  color: const Color(0xFF6B7280),
+                  onTap: () {},
+                ),
+                _shareTile(
+                  icon: FontAwesomeIcons.link,
+                  label: 'Copy Link',
+                  color: AppTheme.primary,
+                  onTap: () => _copyToClipboard(context),
                 ),
               ],
             ),
@@ -91,26 +140,35 @@ class ShareModal extends StatelessWidget {
     );
   }
 
-  Widget _buildShareOption(
-      BuildContext context, IconData icon, String label, VoidCallback onTap) {
+  Widget _shareTile({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
     return InkWell(
+      borderRadius: BorderRadius.circular(AppTheme.radiusLg),
       onTap: onTap,
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppTheme.glassLight,
-              shape: BoxShape.circle,
-              border: Border.all(color: AppTheme.border),
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppTheme.background,
+          borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+          border: Border.all(color: AppTheme.border),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            FaIcon(icon, color: color, size: 28),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: const TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 12,
+              ),
             ),
-            child: Icon(icon, color: AppTheme.primary, size: 28),
-          ),
-          const SizedBox(height: 8),
-          Text(label,
-              style:
-                  const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
-        ],
+          ],
+        ),
       ),
     );
   }
